@@ -97,12 +97,14 @@ if (process.env.TRUST_PROXY) {
 }
 
 // HTTPS enforcement for production
+// Skip redirect for internal Docker hostname "hub" (MCP server connections)
 if (IS_PRODUCTION) {
   app.use((req, res, next) => {
     const isSecure = req.secure || req.headers['x-forwarded-proto'] === 'https';
-    const isLocal = req.hostname === 'localhost' || req.hostname === '127.0.0.1';
+    const host = req.headers.host || '';
+    const isLocal = req.hostname === 'localhost' || req.hostname === '127.0.0.1' || host.startsWith('hub:');
     if (!isSecure && !isLocal) {
-      return res.redirect(301, `https://${req.headers.host}${req.url}`);
+      return res.redirect(301, `https://${host}${req.url}`);
     }
     next();
   });

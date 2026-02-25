@@ -20,6 +20,19 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    networks:
+      - the-agents-network
+
+  # MCP server disabled - using HTTP API directly instead
+  # mcp-lain:
+  #   build:
+  #     context: ../The-Agents-MCP
+  #     dockerfile: Dockerfile
+  #   ...
+
+networks:
+  the-agents-network:
+    driver: bridge
 
 volumes:
   hub-data:
