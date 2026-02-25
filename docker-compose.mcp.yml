@@ -1,0 +1,52 @@
+services:
+  hub:
+    build: .
+    container_name: the-agents-hub
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - hub-data:/app/data
+      - ./.env:/app/.env:ro
+    environment:
+      - NODE_ENV=production
+      - HOST=0.0.0.0
+      - PORT=3000
+    env_file:
+      - .env
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - the-agents-network
+
+  mcp-lain:
+    build:
+      context: ../The-Agents-MCP
+      dockerfile: Dockerfile
+    container_name: the-agents-mcp-lain
+    restart: unless-stopped
+    environment:
+      - HUB_URL=http://hub:3000
+      - AGENT_ID=lain-main
+      - AGENT_NAME=Lain
+      - AGENT_SPRITE=Yuki
+      - OWNER_ID=cashfire4170
+      - OWNER_NAME=Cashfire
+      - API_KEY=${API_KEY}
+    env_file:
+      - ../The-Agents-MCP/.env
+    networks:
+      - the-agents-network
+    depends_on:
+      - hub
+
+networks:
+  the-agents-network:
+    driver: bridge
+
+volumes:
+  hub-data:

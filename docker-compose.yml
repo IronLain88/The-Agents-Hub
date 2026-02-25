@@ -20,6 +20,34 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    networks:
+      - the-agents-network
+
+  mcp-lain:
+    build:
+      context: ../The-Agents-MCP
+      dockerfile: Dockerfile
+    container_name: the-agents-mcp-lain
+    restart: unless-stopped
+    environment:
+      - HUB_URL=http://hub:3000
+      - AGENT_ID=lain-main
+      - AGENT_NAME=Lain
+      - AGENT_SPRITE=Yuki
+      - OWNER_ID=cashfire4170
+      - OWNER_NAME=Cashfire
+    env_file:
+      - ../The-Agents-MCP/.env
+    networks:
+      - the-agents-network
+    depends_on:
+      - hub
+    # MCP servers communicate via stdio, so we don't expose ports
+    # OpenClaw will connect to this container to use MCP tools
+
+networks:
+  the-agents-network:
+    driver: bridge
 
 volumes:
   hub-data:
