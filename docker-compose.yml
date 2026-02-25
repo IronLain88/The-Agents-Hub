@@ -1,0 +1,13 @@
+services:
+  hub:
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      - hub-data:/app/data
+    environment:
+      - NODE_ENV=production
+      - ALLOWED_ORIGINS=*
+
+volumes:
+  hub-data:

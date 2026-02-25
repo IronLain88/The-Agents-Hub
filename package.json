@@ -1,0 +1,25 @@
+{
+  "name": "agent-village-slim-hub",
+  "version": "1.0.0",
+  "description": "Slim hub server for agent village visualization",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "start:test": "set PORT=3001&& set PROPERTY_FILE=property.test.json&& node server.js",
+    "test": "set HUB_URL=http://localhost:3001&& node --test test/property-validation.test.js test/payload-merger.test.js test/signal-api.test.js test/property-api.test.js test/payload-security.test.js",
+    "test:watch": "set HUB_URL=http://localhost:3001&& node --test --watch test/property-validation.test.js test/payload-merger.test.js test/signal-api.test.js test/property-api.test.js test/payload-security.test.js",
+    "test:coverage": "set HUB_URL=http://localhost:3001&& node --test --experimental-test-coverage test/property-validation.test.js test/payload-merger.test.js test/signal-api.test.js test/property-api.test.js test/payload-security.test.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^16.4.5",
+    "express": "^5.1.0",
+    "express-rate-limit": "^8.2.1",
+    "file-type": "^21.3.0",
+    "helmet": "^8.1.0",
+    "sanitize-filename": "^1.6.3",
+    "ws": "^8.18.0",
+    "zod": "^4.3.6"
+  }
+}

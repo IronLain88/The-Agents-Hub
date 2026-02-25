@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>The Agents</title>
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<nav class="top-nav">
+	<a href="/viewer/" class="active">Viewer</a>
+	<a href="/editor/">Property Editor</a>
+	<a href="/editor/asset-editor.html">Asset Editor</a>
+</nav>
+<canvas id="village"></canvas>
+<div id="status" class="status disconnected">Connecting...</div>
+<script type="module">
+	import * as SL from './station-logic.js';
+	window.StationLogic = SL;
+	await new Promise((resolve, reject) => {
+		const s = document.createElement('script');
+		s.src = 'viewer.js';
+		s.onload = resolve;
+		s.onerror = reject;
+		document.body.appendChild(s);
+	});
+</script>
+</body>
+</html>

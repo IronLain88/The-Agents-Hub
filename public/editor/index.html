@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Property Editor</title>
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<nav class="top-nav">
+	<a href="/viewer/">Viewer</a>
+	<a href="/editor/" class="active">Property Editor</a>
+	<a href="/editor/asset-editor.html">Asset Editor</a>
+</nav>
+<div class="app">
+	<div class="toolbar">
+		<div class="btn-group">
+			<button id="tool-paint" class="active" title="Paint (P)">Paint</button>
+			<button id="tool-erase" title="Erase (E)">Erase</button>
+			<button id="tool-select" title="Select (S)">Select</button>
+		</div>
+		<div class="toolbar-sep"></div>
+		<div class="btn-group">
+			<button id="layer-floor" class="active">Floor</button>
+			<button id="layer-assets">Assets</button>
+			<button id="layer-collision">Collision</button>
+		</div>
+		<div class="toolbar-sep"></div>
+		<button id="toggle-collision">Show Collision</button>
+		<div class="toolbar-sep"></div>
+		<button id="btn-load">Load...</button>
+		<button id="btn-save">Save</button>
+		<button id="btn-save-as">Save As...</button>
+		<button id="btn-use-as-default">Use as Default</button>
+		<div class="toolbar-sep"></div>
+		<button id="btn-download">Download JSON</button>
+		<button id="btn-upload">Upload JSON</button>
+		<input type="file" id="file-upload" accept=".json" style="display:none">
+		<div class="toolbar-sep"></div>
+		<a href="asset-editor.html" style="color:var(--accent);font-size:12px">Asset Editor</a>
+	</div>
+	<div class="main">
+		<div class="canvas-wrap">
+			<canvas id="editor-canvas"></canvas>
+		</div>
+		<div class="panel">
+			<div class="panel-header">Palette</div>
+			<div class="palette-tabs" id="palette-tabs"></div>
+			<div class="panel-body">
+				<div class="palette-grid" id="palette-grid"></div>
+			</div>
+			<div id="select-info" style="display:none;padding:8px;border-top:1px solid var(--border)">
+				<div class="config-form" id="select-form"></div>
+			</div>
+		</div>
+	</div>
+	<div class="status-bar" id="status">Ready</div>
+</div>
+<script type="module" src="js/editor.js"></script>
+</body>
+</html>

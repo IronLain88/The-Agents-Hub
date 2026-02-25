@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Asset Editor</title>
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<nav class="top-nav">
+	<a href="/viewer/">Viewer</a>
+	<a href="/editor/">Property Editor</a>
+	<a href="/editor/asset-editor.html" class="active">Asset Editor</a>
+</nav>
+<div class="app">
+	<div class="toolbar">
+		<div class="toolbar-sep"></div>
+		<button id="btn-save">Save Catalog</button>
+		<div class="toolbar-sep"></div>
+		<button id="btn-export">Export Catalog</button>
+		<button id="btn-import">Import Catalog</button>
+		<input type="file" id="file-import" accept=".json" style="display:none">
+	</div>
+	<div class="main">
+		<!-- Left: tileset/animated browser -->
+		<div class="panel-left">
+			<div class="panel-header">Tileset Browser</div>
+			<div style="padding:6px;border-bottom:1px solid var(--border);display:flex;gap:4px;align-items:center">
+				<select id="tileset-select" style="flex:1"></select>
+			</div>
+			<div style="padding:4px 6px;border-bottom:1px solid var(--border);display:flex;gap:6px;align-items:center;font-size:10px">
+				<label style="display:flex;align-items:center;gap:2px">X<input id="grid-offset-x" type="number" value="0" style="width:40px;font-size:10px;padding:1px 2px">px</label>
+				<label style="display:flex;align-items:center;gap:2px">Y<input id="grid-offset-y" type="number" value="0" style="width:40px;font-size:10px;padding:1px 2px">px</label>
+			</div>
+			<div class="tileset-canvas-wrap" id="tileset-wrap">
+				<canvas id="tileset-canvas"></canvas>
+			</div>
+			<div class="panel-header">Animated Sprites</div>
+			<div class="panel-body animated-list" id="animated-list" style="max-height:200px"></div>
+		</div>
+
+		<!-- Center: preview + config -->
+		<div style="flex:1;display:flex;flex-direction:column;overflow:hidden">
+			<div class="panel-header">Agent Position Preview</div>
+			<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:16px;padding:16px;overflow:auto">
+				<div style="background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:8px">
+					<canvas id="approach-canvas" style="image-rendering:pixelated;cursor:pointer"></canvas>
+				</div>
+				<div id="approach-info" style="font-size:11px;color:var(--text-dim)">Select a tile from the tileset</div>
+				<div style="display:flex;gap:6px;justify-content:center;margin-top:8px">
+					<button class="pos-btn" data-slot="0" style="font-size:11px;padding:4px 10px">Agent 1</button>
+					<button class="pos-btn" data-slot="1" style="font-size:11px;padding:4px 10px">Agent 2</button>
+					<button class="pos-btn" data-slot="2" style="font-size:11px;padding:4px 10px">Agent 3</button>
+				</div>
+				<div class="config-form" id="config-form" style="width:260px">
+					<label>Label <input type="text" id="cfg-label"></label>
+					<label>Category</label>
+					<div id="cfg-category-tabs" style="display:flex;flex-wrap:wrap;gap:4px;margin:2px 0 6px"></div>
+					<input type="hidden" id="cfg-category" value="Furniture">
+					<label id="cfg-station-label">Station <input type="text" id="cfg-station" placeholder="e.g. writing_code" list="station-list"></label>
+					<datalist id="station-list"></datalist>
+					<label id="cfg-signal-label">Signal
+						<select id="cfg-signal">
+							<option value="">none</option>
+							<option value="interval">interval</option>
+							<option value="manual">manual</option>
+						</select>
+					</label>
+					<label id="cfg-interval-label" style="display:none">Interval (min) <input type="number" id="cfg-interval" value="1" min="1"></label>
+					<label id="cfg-approach-label">Approach
+						<select id="cfg-approach">
+							<option value="">none</option>
+							<option value="above">above</option>
+							<option value="below" selected>below</option>
+							<option value="left">left</option>
+							<option value="right">right</option>
+							<option value="on">on</option>
+						</select>
+					</label>
+					<label id="cfg-pose-label">Pose
+						<select id="cfg-pose">
+							<option value="idle" selected>idle</option>
+							<option value="sit">sit</option>
+							<option value="phone">phone</option>
+						</select>
+					</label>
+					<label id="cfg-facing-label">Facing
+						<select id="cfg-facing">
+							<option value="auto" selected>auto</option>
+							<option value="up">up</option>
+							<option value="down">down</option>
+							<option value="left">left</option>
+							<option value="right">right</option>
+						</select>
+					</label>
+					<label>Collision
+						<select id="cfg-collision">
+							<option value="">none</option>
+							<option value="solid">solid</option>
+						</select>
+					</label>
+					<label>Width (tiles) <input type="text" id="cfg-w" value="1"></label>
+					<label>Height (tiles) <input type="text" id="cfg-h" value="1"></label>
+					<button id="btn-add" style="margin-top:8px">Add to Catalog</button>
+				</div>
+			</div>
+		</div>
+
+		<!-- Right: catalog items -->
+		<div class="panel">
+			<div class="panel-header">Catalog</div>
+			<div class="palette-tabs" id="catalog-tabs"></div>
+			<div class="panel-body" id="catalog-items"></div>
+		</div>
+	</div>
+	<div class="status-bar" id="status">Ready</div>
+</div>
+<script type="module" src="js/asset-editor.js"></script>
+</body>
+</html>

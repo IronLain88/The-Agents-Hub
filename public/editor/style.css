@@ -1,0 +1,175 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+	--bg: #0e1e2a;
+	--surface: #0f2418;
+	--surface2: #162e20;
+	--border: #1a3a28;
+	--text: #c8d6e5;
+	--text-dim: #6b8d7b;
+	--accent: #21b96b;
+	--accent-hover: #66bb46;
+	--danger: #ff4060;
+	--station: #f0c040;
+}
+
+body {
+	background: var(--bg);
+	color: var(--text);
+	font-family: monospace;
+	font-size: 13px;
+	overflow: hidden;
+	height: 100vh;
+}
+
+.top-nav {
+	display: flex;
+	gap: 4px;
+	padding: 6px 10px;
+	background: var(--surface);
+	border-bottom: 1px solid var(--border);
+	flex-shrink: 0;
+}
+
+.top-nav a {
+	padding: 4px 12px;
+	font-size: 12px;
+	color: var(--text);
+	text-decoration: none;
+	border-radius: 3px;
+	transition: background 0.2s;
+}
+
+.top-nav a:hover {
+	background: rgba(33, 185, 107, 0.15);
+	color: var(--accent);
+	box-shadow: 0 0 8px rgba(33, 185, 107, 0.3);
+}
+
+.top-nav a.active {
+	background: rgba(33, 185, 107, 0.15);
+	color: var(--accent);
+	box-shadow: 0 0 8px rgba(33, 185, 107, 0.3);
+}
+
+/* --- Layout --- */
+.app { display: flex; height: 100vh; flex-direction: column; }
+.toolbar {
+	display: flex; align-items: center; gap: 8px;
+	padding: 6px 10px; background: var(--surface); border-bottom: 1px solid var(--border);
+	flex-shrink: 0; flex-wrap: wrap;
+}
+.main { display: flex; flex: 1; overflow: hidden; }
+.canvas-wrap { flex: 1; position: relative; overflow: hidden; }
+.canvas-wrap canvas { display: block; width: 100%; height: 100%; }
+.panel {
+	width: 260px; background: var(--surface); border-left: 1px solid var(--border);
+	display: flex; flex-direction: column; overflow: hidden; flex-shrink: 0;
+	min-height: 0;
+}
+.panel-left {
+	width: 260px; background: var(--surface); border-right: 1px solid var(--border);
+	display: flex; flex-direction: column; overflow: hidden; flex-shrink: 0;
+}
+.panel-header {
+	padding: 8px 10px; font-weight: bold; border-bottom: 1px solid var(--border);
+	font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-dim);
+}
+.panel-body { flex: 1; overflow-y: auto; padding: 8px; min-height: 0; }
+
+/* --- Controls --- */
+button, select, input[type="text"] {
+	background: var(--surface2); color: var(--text); border: 1px solid var(--border);
+	padding: 4px 10px; border-radius: 3px; font-family: monospace; font-size: 12px;
+	cursor: pointer;
+}
+button:hover { background: var(--accent); color: #fff; box-shadow: 0 0 8px rgba(33, 185, 107, 0.3); }
+button.active { background: var(--accent); color: #fff; }
+button.danger:hover { background: var(--danger); }
+select { cursor: pointer; }
+input[type="text"] { cursor: text; }
+label { font-size: 12px; color: var(--text-dim); }
+
+.btn-group { display: flex; gap: 0; }
+.btn-group button { border-radius: 0; }
+.btn-group button:first-child { border-radius: 3px 0 0 3px; }
+.btn-group button:last-child { border-radius: 0 3px 3px 0; }
+
+.toolbar-sep { width: 1px; height: 22px; background: var(--border); }
+
+/* --- Palette --- */
+.palette-tabs {
+	display: flex; gap: 0; border-bottom: 1px solid var(--border);
+	overflow-x: auto; flex-shrink: 0;
+}
+.palette-tabs button {
+	border: none; border-bottom: 2px solid transparent; border-radius: 0;
+	padding: 6px 10px; font-size: 11px; white-space: nowrap;
+}
+.palette-tabs button.active { border-bottom-color: var(--accent); color: #fff; }
+.palette-grid {
+	display: grid; grid-template-columns: repeat(auto-fill, minmax(52px, 1fr));
+	gap: 4px; padding: 6px; align-content: start;
+}
+.palette-item {
+	border: 2px solid transparent; border-radius: 3px; cursor: pointer;
+	background: var(--bg); padding: 2px; text-align: center; position: relative;
+}
+.palette-item:hover { border-color: var(--accent); }
+.palette-item.selected { border-color: var(--accent); background: var(--surface2); }
+.palette-item canvas { display: block; width: 48px; height: 48px; image-rendering: pixelated; margin: 0 auto; }
+.palette-item .label {
+	font-size: 9px; color: var(--text-dim); overflow: hidden;
+	text-overflow: ellipsis; white-space: nowrap; margin-top: 2px;
+}
+.palette-item .station-dot {
+	position: absolute; top: 2px; right: 2px;
+	width: 6px; height: 6px; border-radius: 50%;
+}
+
+/* --- Asset editor specific --- */
+.tileset-canvas-wrap {
+	overflow: auto; flex: 1; background: var(--bg); padding: 4px;
+}
+.tileset-canvas-wrap canvas { image-rendering: pixelated; cursor: crosshair; }
+.config-form { display: flex; flex-direction: column; gap: 6px; }
+.config-form label { display: flex; flex-direction: column; gap: 2px; }
+.config-form input, .config-form select { width: 100%; }
+.catalog-item {
+	display: flex; align-items: center; gap: 6px; padding: 4px;
+	border-bottom: 1px solid var(--border); cursor: pointer;
+}
+.catalog-item:hover { background: var(--surface2); }
+.catalog-item canvas { width: 32px; height: 32px; image-rendering: pixelated; }
+.catalog-item .info { flex: 1; font-size: 11px; }
+.catalog-item .del { color: var(--danger); cursor: pointer; font-size: 14px; }
+
+.animated-list { display: flex; flex-direction: column; gap: 2px; }
+.animated-item {
+	display: flex; align-items: center; gap: 6px; padding: 4px;
+	cursor: pointer; border-radius: 3px;
+}
+.animated-item:hover { background: var(--surface2); }
+.animated-item.selected { background: var(--accent); color: #fff; }
+.animated-item img { width: 32px; height: 32px; image-rendering: pixelated; object-fit: contain; }
+
+/* --- Status bar --- */
+.status-bar {
+	padding: 4px 10px; background: var(--surface2); border-top: 1px solid var(--border);
+	font-size: 11px; color: var(--text-dim); flex-shrink: 0;
+}
+
+/* --- Position buttons --- */
+.pos-btn {
+	background: var(--surface2); color: var(--text-dim); border: 1px solid var(--border);
+	padding: 4px 10px; border-radius: 3px; cursor: pointer; font-family: monospace;
+}
+.pos-btn:hover { background: var(--border); }
+.pos-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.pos-btn.placed { background: var(--station); color: var(--bg); border-color: var(--station); }
+.pos-btn.placed.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+/* --- Scrollbar --- */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
