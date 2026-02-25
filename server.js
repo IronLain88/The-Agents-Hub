@@ -100,7 +100,8 @@ if (process.env.TRUST_PROXY) {
 if (IS_PRODUCTION) {
   app.use((req, res, next) => {
     const isSecure = req.secure || req.headers['x-forwarded-proto'] === 'https';
-    if (!isSecure) {
+    const isLocal = req.hostname === 'localhost' || req.hostname === '127.0.0.1';
+    if (!isSecure && !isLocal) {
       return res.redirect(301, `https://${req.headers.host}${req.url}`);
     }
     next();
@@ -528,6 +529,21 @@ app.post("/api/state", requireAuth, stateLimiter, (req, res) => {
     parent_agent_id: parent_agent_id || null,
     last_seen: Date.now(),
   };
+  // Dedup: if another agent with the same name+owner already exists under a
+  // different ID (e.g. MCP restarted with a new random suffix), remove the old one.
+  // Only dedup main agents (not subagents) to avoid removing legitimate parallel subagents.
+  if (!parent_agent_id) {
+    for (const [existingId, existing] of agents) {
+      if (existingId !== agent_id
+        && existing.agent_name === entry.agent_name
+        && existing.owner_id === entry.owner_id
+        && !existing.parent_agent_id) {
+        agents.delete(existingId);
+        broadcast({ type: "agent_removed", agent_id: existingId });
+      }
+    }
+  }
+
   agents.set(agent_id, entry);
 
   // Log speech bubbles to activity log
@@ -767,9 +783,9 @@ app.post("/api/board/:station", requireBoard, requireAuth, stateLimiter, (req, r
   res.json({ ok: true });
 });
 
-// Heartbeat: remove agents not seen for 5 minutes
+// Heartbeat: remove agents not seen for 60 seconds
 setInterval(() => {
-  const cutoff = Date.now() - 300_000;
+  const cutoff = Date.now() - 60_000;
   for (const [id, entry] of agents) {
     if (entry.last_seen < cutoff) {
       agents.delete(id);
@@ -777,7 +793,7 @@ setInterval(() => {
       console.log(`[hub] Removed stale agent ${id}`);
     }
   }
-}, 30_000);
+}, 15_000);
 
 // Centralized error handling middleware
 app.use((err, req, res, next) => {
