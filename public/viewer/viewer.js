@@ -843,9 +843,35 @@ async function handleCanvasClick(e) {
     showSignalInfo(asset);
   } else if (asset.logger || asset.name?.toLowerCase().includes('log')) {
     await showActivityLog(asset);
+  } else if (asset.station === 'inbox') {
+    showInboxMessages(asset);
   } else if (asset.station) {
     showStationInfo(asset);
   }
+}
+
+function showInboxMessages(asset) {
+  let messages = [];
+  try {
+    if (asset.content?.data) {
+      const parsed = typeof asset.content.data === 'string'
+        ? JSON.parse(asset.content.data) : asset.content.data;
+      if (Array.isArray(parsed)) messages = parsed;
+    }
+  } catch { /* ignore parse errors */ }
+
+  if (!messages.length) {
+    showModal('📬 Inbox', 'No messages.', false);
+    return;
+  }
+
+  const lines = messages.map(m => {
+    const time = m.timestamp ? new Date(m.timestamp).toLocaleString() : '';
+    const from = m.from || 'Unknown';
+    return `${from}${time ? '  (' + time + ')' : ''}\n  ${m.text || '(empty)'}`;
+  });
+
+  showModal('📬 Inbox', lines.join('\n\n'), true);
 }
 
 function showStationInfo(asset) {
