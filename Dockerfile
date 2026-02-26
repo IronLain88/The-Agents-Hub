@@ -9,7 +9,7 @@ COPY server.js ./
 COPY src/ ./src/
 COPY public/ ./public/
 
-RUN mkdir -p data
+COPY data/property.json ./data/property.json
 
 ENV NODE_ENV=production
 ENV PORT=3000
