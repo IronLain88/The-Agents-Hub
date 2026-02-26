@@ -31,6 +31,7 @@ const BUILT_IN_STATES = [
   { name: "writing_code", group: "creating",   color: "#60f060" },
   { name: "writing_text", group: "creating",   color: "#60d0f0" },
   { name: "generating",   group: "creating",   color: "#f060c0" },
+  { name: "inbox",        group: "communicating", color: "#5a9ef0" },
   { name: "idle",         group: "idle",       color: "#808080" },
 ];
 
