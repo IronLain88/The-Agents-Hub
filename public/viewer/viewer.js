@@ -845,6 +845,8 @@ async function handleCanvasClick(e) {
     await showActivityLog(asset);
   } else if (asset.station === 'inbox') {
     showInboxMessages(asset);
+  } else if (asset.remote_url && asset.remote_station) {
+    await showRemoteBoard(asset);
   } else if (asset.station) {
     showStationInfo(asset);
   }
@@ -872,6 +874,30 @@ function showInboxMessages(asset) {
   });
 
   showModal('📬 Inbox', lines.join('\n\n'), true);
+}
+
+async function showRemoteBoard(asset) {
+  const station = asset.station || asset.name || 'Remote Board';
+  try {
+    const res = await fetch(`${HUB_HTTP_URL}/api/board/${encodeURIComponent(asset.station)}/remote`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }));
+      showModal(`📡 ${station}`, err.error || 'Failed to fetch remote board', false);
+      return;
+    }
+    const board = await res.json();
+    let text = `Remote: ${asset.remote_url}\nStation: ${asset.remote_station}\n\n`;
+    if (board.content) {
+      text += `--- Content (${board.content.type || 'text'}) ---\n${board.content.data}`;
+      if (board.content.publishedAt) text += `\n\nPublished: ${board.content.publishedAt}`;
+    } else {
+      text += 'No content posted yet.';
+    }
+    if (board.log) text += `\n\n--- Activity Log ---\n${board.log}`;
+    showModal(`📡 ${station}`, text, true);
+  } catch (err) {
+    showModal(`📡 ${station}`, `Failed to fetch remote board: ${err.message}`, false);
+  }
 }
 
 function showStationInfo(asset) {

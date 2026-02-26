@@ -32,6 +32,7 @@ const BUILT_IN_STATES = [
   { name: "writing_text", group: "creating",   color: "#60d0f0" },
   { name: "generating",   group: "creating",   color: "#f060c0" },
   { name: "inbox",        group: "communicating", color: "#5a9ef0" },
+  { name: "remote_board", group: "communicating", color: "#9a6ef0" },
   { name: "idle",         group: "idle",       color: "#808080" },
 ];
 
@@ -42,9 +43,11 @@ const IS_PRODUCTION = NODE_ENV === "production";
 
 // Security: Disable payload transmission to prevent prompt injection (set ALLOW_SIGNAL_PAYLOADS=true to enable)
 const ALLOW_SIGNAL_PAYLOADS = process.env.ALLOW_SIGNAL_PAYLOADS === "true";
+const ENABLE_REMOTE_BOARDS = process.env.ENABLE_REMOTE_BOARDS === "true";
 
 console.log(`[hub] Environment: ${NODE_ENV}`);
 console.log(`[hub] Signal payloads: ${ALLOW_SIGNAL_PAYLOADS ? 'ENABLED' : 'DISABLED (set ALLOW_SIGNAL_PAYLOADS=true to enable)'}`);
+console.log(`[hub] Remote boards: ${ENABLE_REMOTE_BOARDS ? 'ENABLED' : 'DISABLED (set ENABLE_REMOTE_BOARDS=true to enable)'}`);
 
 const app = express();
 
@@ -450,7 +453,7 @@ app.post("/api/assets", requireAuth, propertyLimiter, (req, res) => {
     return res.status(404).json({ error: "No property loaded" });
   }
 
-  const { name, tileset, tx, ty, x, y, station, approach, collision } = validation.data;
+  const { name, tileset, tx, ty, x, y, station, approach, collision, remote_url, remote_station } = validation.data;
   const id = `${name.toLowerCase().replace(/\s+/g, "-")}-${Date.now()}`;
   const asset = {
     id,
@@ -460,6 +463,8 @@ app.post("/api/assets", requireAuth, propertyLimiter, (req, res) => {
     collision: collision ?? false,
     ...(station && { station }),
     ...(approach && { approach }),
+    ...(remote_url && { remote_url }),
+    ...(remote_station && { remote_station }),
   };
 
   currentProperty.assets.push(asset);
@@ -906,6 +911,48 @@ app.post("/api/board/:station", requireBoard, requireAuth, stateLimiter, (req, r
   savePropertyToDisk().catch(e => console.error("[hub] Failed to save property:", e));
   console.log(`[hub] Board "${station}" updated (${data.length} chars)`);
   res.json({ ok: true });
+});
+
+// --- Remote board proxy (feature-flagged) ---
+function requireRemoteBoard(_req, res, next) {
+  if (!ENABLE_REMOTE_BOARDS) return res.status(404).json({ error: "Remote boards are not enabled (set ENABLE_REMOTE_BOARDS=true)" });
+  next();
+}
+
+app.get("/api/board/:station/remote", requireBoard, requireRemoteBoard, async (req, res) => {
+  const station = req.params.station;
+  const asset = currentProperty?.assets?.find(a => a.station === station);
+  if (!asset) {
+    return res.status(404).json({ error: `Station "${station}" not found` });
+  }
+  if (!asset.remote_url || !asset.remote_station) {
+    return res.status(400).json({ error: `Station "${station}" has no remote board configured` });
+  }
+
+  // SSRF check: only allow http/https to non-private hosts
+  try {
+    const parsed = new URL(asset.remote_url);
+    if (!["http:", "https:"].includes(parsed.protocol)) {
+      return res.status(400).json({ error: "Remote URL must use http or https" });
+    }
+    const host = parsed.hostname;
+    if (host === "localhost" || host === "127.0.0.1" || host === "0.0.0.0" || host.startsWith("10.") || host.startsWith("192.168.") || host.startsWith("169.254.") || host === "::1") {
+      return res.status(400).json({ error: "Remote URL cannot point to private/local addresses" });
+    }
+  } catch {
+    return res.status(400).json({ error: "Invalid remote URL" });
+  }
+
+  try {
+    const remoteRes = await fetch(`${asset.remote_url}/api/board/${encodeURIComponent(asset.remote_station)}`);
+    if (!remoteRes.ok) {
+      return res.status(502).json({ error: `Remote hub returned ${remoteRes.status}` });
+    }
+    const data = await remoteRes.json();
+    res.json(data);
+  } catch (err) {
+    res.status(502).json({ error: IS_PRODUCTION ? "Failed to fetch remote board" : err.message });
+  }
 });
 
 // Heartbeat: remove agents not seen for 60 seconds

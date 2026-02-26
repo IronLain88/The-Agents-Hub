@@ -94,6 +94,8 @@ export const addAssetSchema = z.object({
   station: z.string().max(100).optional(),
   approach: z.enum(["above", "below", "left", "right"]).optional(),
   collision: z.boolean().optional(),
+  remote_url: z.string().max(500).optional(),
+  remote_station: z.string().max(100).optional(),
 });
 
 export const patchAssetSchema = z.object({
