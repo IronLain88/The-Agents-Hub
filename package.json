@@ -7,7 +7,7 @@
   "scripts": {
     "start": "node server.js",
     "start:test": "set PORT=3001&& set PROPERTY_FILE=property.test.json&& node server.js",
-    "test": "node --test test/property-validation.test.js test/payload-merger.test.js",
+    "test": "node --test test/property-validation.test.js test/payload-merger.test.js test/station-log.test.js",
     "test:integration": "node --test test/signal-api.test.js test/property-api.test.js test/payload-security.test.js",
     "test:all": "node --test test/property-validation.test.js test/payload-merger.test.js test/signal-api.test.js test/property-api.test.js test/payload-security.test.js",
     "test:watch": "node --test --watch test/property-validation.test.js test/payload-merger.test.js",

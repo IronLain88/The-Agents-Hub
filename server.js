@@ -12,6 +12,7 @@ import sanitizeFilename from "sanitize-filename";
 import { fileTypeFromBuffer } from "file-type";
 import { ensureV2 } from "./src/lib/property-validation.js";
 import { createHeartbeatPayload, createManualPayload, shouldAllowPayload } from "./src/lib/payload-merger.js";
+import { formatBreadcrumb, applyBreadcrumb, applyNote } from "./src/lib/station-log.js";
 import * as schemas from "./src/lib/validation.js";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -86,7 +87,7 @@ app.use(cors({
       callback(new Error('Not allowed by CORS'));
     }
   },
-  methods: ['GET', 'POST', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
@@ -436,6 +437,99 @@ app.post("/api/property/set-default", requireAuth, propertyLimiter, async (req, 
   }
 });
 
+// --- Granular asset endpoints ---
+
+// POST /api/assets — add a new asset
+app.post("/api/assets", requireAuth, propertyLimiter, (req, res) => {
+  const validation = schemas.addAssetSchema.safeParse(req.body);
+  if (!validation.success) {
+    return res.status(400).json({ error: validation.error.issues[0].message });
+  }
+  if (!currentProperty) {
+    return res.status(404).json({ error: "No property loaded" });
+  }
+
+  const { name, tileset, tx, ty, x, y, station, approach, collision } = validation.data;
+  const id = `${name.toLowerCase().replace(/\s+/g, "-")}-${Date.now()}`;
+  const asset = {
+    id,
+    name,
+    sprite: { tileset: tileset || "interiors", tx: tx || 0, ty: ty || 0 },
+    position: x !== undefined && y !== undefined ? { x, y } : null,
+    collision: collision ?? false,
+    ...(station && { station }),
+    ...(approach && { approach }),
+  };
+
+  currentProperty.assets.push(asset);
+  broadcast({ type: "property_update", property: currentProperty });
+  savePropertyToDisk().catch(e => console.error("[hub] Failed to save property:", e));
+  res.json({ ok: true, asset });
+});
+
+// DELETE /api/assets/:id — remove an asset
+app.delete("/api/assets/:id", requireAuth, propertyLimiter, (req, res) => {
+  if (!currentProperty?.assets) {
+    return res.status(404).json({ error: "No property loaded" });
+  }
+  const idx = currentProperty.assets.findIndex(a => a.id === req.params.id);
+  if (idx === -1) {
+    return res.status(404).json({ error: "Asset not found" });
+  }
+  const removed = currentProperty.assets.splice(idx, 1)[0];
+  broadcast({ type: "property_update", property: currentProperty });
+  savePropertyToDisk().catch(e => console.error("[hub] Failed to save property:", e));
+  res.json({ ok: true, removed });
+});
+
+// PATCH /api/assets/:id — update asset fields (position, content)
+app.patch("/api/assets/:id", requireAuth, propertyLimiter, (req, res) => {
+  const validation = schemas.patchAssetSchema.safeParse(req.body);
+  if (!validation.success) {
+    return res.status(400).json({ error: validation.error.issues[0].message });
+  }
+  if (!currentProperty?.assets) {
+    return res.status(404).json({ error: "No property loaded" });
+  }
+  const asset = currentProperty.assets.find(a => a.id === req.params.id);
+  if (!asset) {
+    return res.status(404).json({ error: "Asset not found" });
+  }
+
+  const { position, content } = validation.data;
+  if (position) asset.position = position;
+  if (content) asset.content = content;
+
+  broadcast({ type: "property_update", property: currentProperty });
+  savePropertyToDisk().catch(e => console.error("[hub] Failed to save property:", e));
+  res.json({ ok: true, asset });
+});
+
+// POST /api/assets/:id/log — append a breadcrumb or note to an asset's log
+app.post("/api/assets/:id/log", requireAuth, stateLimiter, (req, res) => {
+  const validation = schemas.logEntrySchema.safeParse(req.body);
+  if (!validation.success) {
+    return res.status(400).json({ error: validation.error.issues[0].message });
+  }
+  if (!currentProperty?.assets) {
+    return res.status(404).json({ error: "No property loaded" });
+  }
+  const asset = currentProperty.assets.find(a => a.id === req.params.id);
+  if (!asset) {
+    return res.status(404).json({ error: "Asset not found" });
+  }
+
+  const { entry, isNote } = validation.data;
+  const log = asset.log || "";
+  asset.log = isNote
+    ? applyNote(log, entry)
+    : applyBreadcrumb(log, formatBreadcrumb(entry));
+
+  broadcast({ type: "property_update", property: currentProperty });
+  savePropertyToDisk().catch(e => console.error("[hub] Failed to save property:", e));
+  res.json({ ok: true });
+});
+
 // Tile catalog
 const CATALOG_FILE = join(DATA_DIR, "tile_catalog.json");
 
@@ -509,13 +603,16 @@ function assignCharacter(agentId) {
   return availableCharacters[Math.abs(hash) % availableCharacters.length];
 }
 
+// Track previous state per agent for station logging
+const agentPreviousState = new Map(); // agent_id → { state, stationId }
+
 // POST /api/state — agent reports its state
 app.post("/api/state", requireAuth, stateLimiter, (req, res) => {
   const validation = schemas.agentStateSchema.safeParse(req.body);
   if (!validation.success) {
     return res.status(400).json({ error: validation.error.issues[0].message });
   }
-  const { agent_id, agent_name, state, detail, group, sprite, owner_id, owner_name, parent_agent_id } = validation.data;
+  const { agent_id, agent_name, state, detail, group, sprite, owner_id, owner_name, parent_agent_id, note } = validation.data;
 
   const entry = {
     agent_id,
@@ -545,6 +642,33 @@ app.post("/api/state", requireAuth, stateLimiter, (req, res) => {
   }
 
   agents.set(agent_id, entry);
+
+  // Station logging: append breadcrumbs/notes to station assets
+  if (currentProperty?.assets) {
+    const prev = agentPreviousState.get(agent_id);
+
+    // If state changed and a note was provided, append it to the previous station
+    if (prev && prev.state !== state && note && prev.stationId) {
+      const prevAsset = currentProperty.assets.find(a => a.id === prev.stationId);
+      if (prevAsset) {
+        prevAsset.log = applyNote(prevAsset.log || "", note);
+      }
+    }
+
+    // Append breadcrumb to current station
+    const currentStation = currentProperty.assets.find(a => a.station === state);
+    if (currentStation && detail) {
+      currentStation.log = applyBreadcrumb(currentStation.log || "", formatBreadcrumb(detail));
+    }
+
+    agentPreviousState.set(agent_id, { state, stationId: currentStation?.id || null });
+
+    // Save if we modified any logs
+    if ((prev?.stationId && note && prev.state !== state) || (currentStation && detail)) {
+      broadcast({ type: "property_update", property: currentProperty });
+      savePropertyToDisk().catch(e => console.error("[hub] Failed to save property:", e));
+    }
+  }
 
   // Log speech bubbles to activity log
   if (detail && detail.trim()) {

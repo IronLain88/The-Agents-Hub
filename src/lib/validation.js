@@ -80,6 +80,35 @@ export const agentStateSchema = z.object({
   owner_id: z.string().max(200).optional(),
   owner_name: z.string().max(100).optional(),
   parent_agent_id: z.string().max(200).nullable().optional(),
+  note: z.string().max(500).optional(),
+});
+
+// Asset CRUD validation
+export const addAssetSchema = z.object({
+  name: z.string().min(1, "Name is required").max(100),
+  tileset: z.string().max(100).optional(),
+  tx: z.number().int().optional(),
+  ty: z.number().int().optional(),
+  x: z.number().int().optional(),
+  y: z.number().int().optional(),
+  station: z.string().max(100).optional(),
+  approach: z.enum(["above", "below", "left", "right"]).optional(),
+  collision: z.boolean().optional(),
+});
+
+export const patchAssetSchema = z.object({
+  position: z.object({ x: z.number().int(), y: z.number().int() }).optional(),
+  content: z.object({
+    type: z.string().max(50),
+    data: z.string().max(100000),
+    source: z.string().max(500).optional(),
+    publishedAt: z.string().max(50).optional(),
+  }).optional(),
+}).refine(data => data.position || data.content, { message: "Must provide position or content" });
+
+export const logEntrySchema = z.object({
+  entry: z.string().min(1).max(500),
+  isNote: z.boolean().optional(),
 });
 
 // Board post validation
