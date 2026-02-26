@@ -8,11 +8,8 @@ node_modules/
 .env.development
 
 # Data files (runtime generated)
-data/
-*.json
-!package.json
-!package-lock.json
-!tsconfig.json
+data/*
+!data/property.json
 
 # Logs
 *.log
