@@ -119,6 +119,12 @@ export const boardPostSchema = z.object({
   type: z.enum(["text", "markdown", "json"]).optional(),
 });
 
+// Inbox message validation
+export const inboxMessageSchema = z.object({
+  from: z.string().min(1, "From cannot be empty").max(100, "From name too long"),
+  text: z.string().min(1, "Text cannot be empty").max(2000, "Text cannot exceed 2000 characters"),
+});
+
 // Sprite filename validation
 export const spriteFilenameSchema = z.string()
   .min(1, "Filename cannot be empty")

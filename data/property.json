@@ -6742,6 +6742,26 @@
 			"station": "Manual_Signal 2",
 			"trigger": "manual",
 			"trigger_interval": 1
+		},
+		{
+			"id": "inbox-1772200181351",
+			"name": "Inbox",
+			"sprite": {
+				"tileset": "interiors",
+				"tx": 0,
+				"ty": 0
+			},
+			"position": {
+				"x": 5,
+				"y": 5
+			},
+			"collision": false,
+			"station": "inbox",
+			"content": {
+				"type": "json",
+				"data": "[]",
+				"publishedAt": "2026-02-27T13:50:06.801Z"
+			}
 		}
 	],
 	"collision": []

@@ -422,13 +422,62 @@ function drawPropertyTiles() {
 
 function drawAssetIndicators(asset, propX, propY) {
   if (!asset.position) return;
+  const w = asset.width || 1;
   const px = propX + asset.position.x * TILE_SIZE;
   const py = propY + asset.position.y * TILE_SIZE;
+  const pw = w * TILE_SIZE;
 
-  if (asset.content) {
-    ctx.fillStyle = "rgba(255, 215, 0, 0.9)";
+  // Inbox: pulsing glow + count badge
+  if (asset.station === 'inbox' && asset.content?.data) {
+    let msgs = [];
+    try {
+      const d = typeof asset.content.data === 'string' ? JSON.parse(asset.content.data) : asset.content.data;
+      if (Array.isArray(d)) msgs = d;
+    } catch {}
+    if (msgs.length) {
+      const pulse = 0.25 + 0.15 * Math.sin(animTime * 3);
+      ctx.fillStyle = `rgba(255, 215, 0, ${pulse})`;
+      ctx.fillRect(px, py, pw, TILE_SIZE);
+      // Red badge top-right
+      const bx = px + pw - 4;
+      const by = py + 4;
+      ctx.fillStyle = '#e33';
+      ctx.beginPath();
+      ctx.arc(bx, by, 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 7px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(msgs.length > 99 ? '99+' : String(msgs.length), bx, by);
+    }
+    return;
+  }
+
+  // Signal: expanding ring
+  if (asset.trigger) {
+    const interval = asset.trigger_interval || 60;
+    const speed = Math.max(0.5, 6 / interval);
+    const cx = px + pw / 2;
+    const cy = py + TILE_SIZE / 2;
+    const phase = (animTime * speed) % 1;
+    const radius = 4 + phase * 12;
+    const alpha = 0.6 * (1 - phase);
+    ctx.strokeStyle = asset.trigger === 'heartbeat'
+      ? `rgba(80, 160, 255, ${alpha})`
+      : `rgba(255, 160, 50, ${alpha})`;
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.arc(px + TILE_SIZE - 3, py + 3, 2.5, 0, Math.PI * 2);
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.stroke();
+    return;
+  }
+
+  // Board content dot
+  if (asset.content) {
+    ctx.fillStyle = 'rgba(255, 215, 0, 0.9)';
+    ctx.beginPath();
+    ctx.arc(px + pw - 3, py + 3, 2.5, 0, Math.PI * 2);
     ctx.fill();
   }
 }
@@ -862,18 +911,52 @@ function showInboxMessages(asset) {
     }
   } catch { /* ignore parse errors */ }
 
-  if (!messages.length) {
-    showModal('📬 Inbox', 'No messages.', false);
-    return;
-  }
+  const lines = messages.length
+    ? messages.map(m => {
+        const time = m.timestamp ? new Date(m.timestamp).toLocaleString() : '';
+        const from = m.from || 'Unknown';
+        return `${from}${time ? '  (' + time + ')' : ''}\n  ${m.text || '(empty)'}`;
+      }).join('\n\n')
+    : 'No messages.';
 
-  const lines = messages.map(m => {
-    const time = m.timestamp ? new Date(m.timestamp).toLocaleString() : '';
-    const from = m.from || 'Unknown';
-    return `${from}${time ? '  (' + time + ')' : ''}\n  ${m.text || '(empty)'}`;
+  showModal('📬 Inbox', lines, messages.length > 0, null, null, null, (box) => {
+    const form = document.createElement('div');
+    form.style.cssText = 'display:flex;gap:6px;margin-top:12px;border-top:1px solid #3a3a5a;padding-top:10px;';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.placeholder = 'Send a message...';
+    input.maxLength = 2000;
+    input.style.cssText = 'flex:1;background:#1a1a30;border:1px solid #3a3a5a;border-radius:4px;color:#ccc;padding:6px 8px;font-family:monospace;font-size:12px;';
+    const btn = document.createElement('button');
+    btn.textContent = 'Send';
+    btn.style.cssText = 'background:#3a5a8a;color:#ccc;border:none;border-radius:4px;padding:6px 12px;cursor:pointer;font-family:monospace;font-size:12px;';
+    btn.onclick = async () => {
+      const text = input.value.trim();
+      if (!text) return;
+      btn.disabled = true;
+      try {
+        const res = await fetch(`${HUB_HTTP_URL}/api/inbox`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...(CONFIG.apiKey && { Authorization: `Bearer ${CONFIG.apiKey}` }) },
+          body: JSON.stringify({ from: 'Viewer', text }),
+        });
+        if (res.ok) {
+          input.value = '';
+          // Refresh inbox modal
+          const modal = document.getElementById('station-modal');
+          if (modal) modal.remove();
+          const prop = await fetch(`${HUB_HTTP_URL}/api/property`).then(r => r.json());
+          const refreshed = prop.assets?.find(a => a.station === 'inbox');
+          if (refreshed) showInboxMessages(refreshed);
+        }
+      } catch { /* ignore */ }
+      btn.disabled = false;
+    };
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') btn.click(); });
+    form.appendChild(input);
+    form.appendChild(btn);
+    box.appendChild(form);
   });
-
-  showModal('📬 Inbox', lines.join('\n\n'), true);
 }
 
 async function showRemoteBoard(asset) {
@@ -1151,7 +1234,7 @@ async function showActivityLog(asset) {
   showModal('📋 Activity Log', content, true, setup);
 }
 
-function showModal(title, content, scrollable = false, setupInstructions = null, editableInterval = null, signalAsset = null) {
+function showModal(title, content, scrollable = false, setupInstructions = null, editableInterval = null, signalAsset = null, onReady = null) {
   // Remove existing modal if any
   const existing = document.getElementById('station-modal');
   if (existing) existing.remove();
@@ -1541,6 +1624,8 @@ function showModal(title, content, scrollable = false, setupInstructions = null,
     box.appendChild(toggleLink);
     box.appendChild(setupEl);
   }
+
+  if (onReady) onReady(box);
 
   modal.appendChild(box);
   document.body.appendChild(modal);

@@ -612,6 +612,39 @@ function assignCharacter(agentId) {
 // Track previous state per agent for station logging
 const agentPreviousState = new Map(); // agent_id → { state, stationId }
 
+// Build a compact welcome summary of the current property
+function buildWelcome() {
+  const assets = currentProperty?.assets || [];
+  const stations = [];
+  const signals = [];
+  const boards = [];
+  let inboxCount = 0;
+
+  for (const a of assets) {
+    if (!a.station) continue;
+    if (a.trigger) {
+      signals.push(`${a.name || a.station} (${a.trigger})`);
+    } else if (a.station === "inbox" && a.content?.data) {
+      try {
+        const msgs = JSON.parse(a.content.data);
+        if (Array.isArray(msgs)) inboxCount += msgs.length;
+      } catch {}
+      if (!stations.includes(a.station)) stations.push(a.station);
+    } else {
+      if (!stations.includes(a.station)) stations.push(a.station);
+      if (a.content?.data) boards.push(a.name || a.station);
+    }
+  }
+
+  // Other active agents
+  const others = [];
+  for (const [, entry] of agents) {
+    others.push({ name: entry.agent_name, state: entry.state });
+  }
+
+  return { stations, signals, boards, inbox: inboxCount, agents: others };
+}
+
 // POST /api/state — agent reports its state
 app.post("/api/state", requireAuth, stateLimiter, (req, res) => {
   const validation = schemas.agentStateSchema.safeParse(req.body);
@@ -647,6 +680,7 @@ app.post("/api/state", requireAuth, stateLimiter, (req, res) => {
     }
   }
 
+  const isNewAgent = !agents.has(agent_id);
   agents.set(agent_id, entry);
 
   // Station logging: append breadcrumbs/notes to station assets
@@ -703,6 +737,12 @@ app.post("/api/state", requireAuth, stateLimiter, (req, res) => {
     parent_agent_id: entry.parent_agent_id,
   });
 
+  // Welcome on first report: property summary so agents know what's here
+  if (isNewAgent) {
+    const welcome = buildWelcome();
+    return res.json({ ok: true, welcome });
+  }
+
   res.json({ ok: true });
 });
 
@@ -714,6 +754,47 @@ app.get("/api/agents", (_req, res) => {
 // GET /api/activity-log — retrieve activity log
 app.get("/api/activity-log", (_req, res) => {
   res.json(activityLog);
+});
+
+// GET /api/status — compact status overview for agents
+app.get("/api/status", (_req, res) => {
+  // Agents summary
+  const agentList = [];
+  const occupiedStations = new Set();
+  for (const [, entry] of agents) {
+    const isIdle = entry.state === "idle";
+    const a = { name: entry.agent_name, state: entry.state, detail: entry.detail || "", idle: isIdle };
+    if (entry.parent_agent_id) a.sub = true;
+    agentList.push(a);
+    if (!isIdle) occupiedStations.add(entry.state);
+  }
+
+  // Inbox summary
+  let inboxCount = 0;
+  let inboxLatest = null;
+  for (const asset of currentProperty.assets || []) {
+    if (asset.station === "inbox" && asset.content?.data) {
+      try {
+        const msgs = JSON.parse(asset.content.data);
+        if (Array.isArray(msgs)) inboxCount += msgs.length;
+      } catch {}
+      if (asset.content.publishedAt && (!inboxLatest || asset.content.publishedAt > inboxLatest)) {
+        inboxLatest = asset.content.publishedAt;
+      }
+    }
+  }
+
+  // Recent activity (last 5)
+  const recent = activityLog.slice(-5).reverse().map(e => ({
+    agent: e.agent_name, state: e.state, detail: e.detail, t: e.timestamp,
+  }));
+
+  res.json({
+    agents: agentList,
+    inbox: { count: inboxCount, latest: inboxLatest },
+    activity: recent,
+    stations: [...occupiedStations],
+  });
 });
 
 // WebSocket: viewer connects
@@ -910,6 +991,58 @@ app.post("/api/board/:station", requireBoard, requireAuth, stateLimiter, (req, r
   broadcast({ type: "property_update", property: currentProperty });
   savePropertyToDisk().catch(e => console.error("[hub] Failed to save property:", e));
   console.log(`[hub] Board "${station}" updated (${data.length} chars)`);
+  res.json({ ok: true });
+});
+
+// --- Inbox endpoints ---
+
+// POST /api/inbox — append a message to the inbox
+app.post("/api/inbox", requireAuth, stateLimiter, (req, res) => {
+  const validation = schemas.inboxMessageSchema.safeParse(req.body);
+  if (!validation.success) {
+    return res.status(400).json({ error: validation.error.issues[0].message });
+  }
+  if (!currentProperty?.assets) {
+    return res.status(404).json({ error: "No property loaded" });
+  }
+  const asset = currentProperty.assets.find(a => a.station === "inbox");
+  if (!asset) {
+    return res.status(404).json({ error: 'No inbox found — add an asset with station="inbox" to your property' });
+  }
+
+  let messages = [];
+  try {
+    if (asset.content?.data) messages = JSON.parse(asset.content.data);
+    if (!Array.isArray(messages)) messages = [];
+  } catch { messages = []; }
+
+  const { from, text } = validation.data;
+  messages.push({ from, text, timestamp: new Date().toISOString() });
+
+  // Cap at 50 messages
+  while (messages.length > 50) messages.shift();
+
+  asset.content = { type: "json", data: JSON.stringify(messages), publishedAt: new Date().toISOString() };
+  broadcast({ type: "property_update", property: currentProperty });
+  savePropertyToDisk().catch(e => console.error("[hub] Failed to save property:", e));
+  console.log(`[hub] Inbox message from "${from}" (${messages.length} total)`);
+  res.json({ ok: true, count: messages.length });
+});
+
+// DELETE /api/inbox — clear all inbox messages
+app.delete("/api/inbox", requireAuth, stateLimiter, (req, res) => {
+  if (!currentProperty?.assets) {
+    return res.status(404).json({ error: "No property loaded" });
+  }
+  const asset = currentProperty.assets.find(a => a.station === "inbox");
+  if (!asset) {
+    return res.status(404).json({ error: 'No inbox found — add an asset with station="inbox" to your property' });
+  }
+
+  asset.content = { type: "json", data: "[]", publishedAt: new Date().toISOString() };
+  broadcast({ type: "property_update", property: currentProperty });
+  savePropertyToDisk().catch(e => console.error("[hub] Failed to save property:", e));
+  console.log("[hub] Inbox cleared");
   res.json({ ok: true });
 });
 
