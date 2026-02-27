@@ -1,5 +1,7 @@
 // Slim single-property viewer — no village map, no build mode
 const CONFIG = window.VILLAGE_CONFIG || {};
+const urlParams = new URLSearchParams(window.location.search);
+if (urlParams.get('apiKey')) CONFIG.apiKey = urlParams.get('apiKey');
 const HUB_WS_URL = CONFIG.hubWsUrl || `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}`;
 const HUB_HTTP_URL = CONFIG.hubHttpUrl || '';
 const ASSET_BASE = CONFIG.assetBase || '/assets';
@@ -898,6 +900,8 @@ async function handleCanvasClick(e) {
     await showRemoteBoard(asset);
   } else if (asset.station) {
     showStationInfo(asset);
+  } else {
+    showModal(asset.name || 'Furniture', 'A piece of furniture on the property.');
   }
 }
 
@@ -1013,11 +1017,16 @@ function showStationInfo(asset) {
   const desc = STATION_DESCRIPTIONS[station] || "A station where agents perform work.";
   const icon = station === 'idle' ? '💤' : station.includes('writing') ? '✍️' : station.includes('reading') ? '📚' : station.includes('thinking') ? '💭' : station.includes('planning') ? '📋' : '⚙️';
 
-  // Agent presence
+  // Agent presence — match by tile position, not just station name
   let text = desc + '\n';
   const here = [];
-  for (const [, agent] of agents) {
-    if (agent.state === station) here.push(agent);
+  const key = `${asset.position.x},${asset.position.y}`;
+  const occupantIds = stationOccupants.get(key);
+  if (occupantIds) {
+    for (const id of occupantIds) {
+      const agent = agents.get(id);
+      if (agent) here.push(agent);
+    }
   }
   if (here.length) {
     text += '\n' + here.map(a => `${a.agent_name || a.agent_id} is here — ${a.detail || station}`).join('\n');
