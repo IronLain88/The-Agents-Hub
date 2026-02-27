@@ -1088,9 +1088,9 @@ app.get("/api/board/:station/remote", requireBoard, requireRemoteBoard, async (r
   }
 });
 
-// Heartbeat: remove agents not seen for 60 seconds
+// Heartbeat: remove agents not seen for 3 minutes
 setInterval(() => {
-  const cutoff = Date.now() - 60_000;
+  const cutoff = Date.now() - 180_000;
   for (const [id, entry] of agents) {
     if (entry.last_seen < cutoff) {
       agents.delete(id);

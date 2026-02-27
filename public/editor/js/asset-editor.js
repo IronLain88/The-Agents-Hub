@@ -3,6 +3,7 @@ import {
 	loadTilesets, getTilesetImage, TILESET_URIS,
 	loadTileCatalog, loadAnimatedFiles, loadAnimatedImage,
 	fetchStates, getStatesData,
+	authHeaders, setupAuthUI,
 } from "./editor-shared.js";
 
 // --- State ---
@@ -790,13 +791,15 @@ document.getElementById("btn-save").onclick = async () => {
 	try {
 		const res = await fetch("/api/tile-catalog", {
 			method: "POST",
-			headers: { "Content-Type": "application/json" },
+			headers: authHeaders(),
 			body: JSON.stringify(catalog),
 		});
-		if (res.ok) {
-			statusEl.textContent = "Catalog saved to server";
+		if (res.status === 401) {
+			statusEl.textContent = "Unauthorized — click Login to authenticate";
+		} else if (!res.ok) {
+			statusEl.textContent = `Save failed: ${res.status}`;
 		} else {
-			statusEl.textContent = "Save failed";
+			statusEl.textContent = "Catalog saved ✓";
 		}
 	} catch (err) {
 		statusEl.textContent = `Save error: ${err.message}`;
@@ -837,6 +840,7 @@ document.getElementById("file-import").onchange = (e) => {
 // --- Init ---
 
 async function init() {
+	setupAuthUI();
 	statusEl.textContent = "Loading assets...";
 
 	const poseFiles = {

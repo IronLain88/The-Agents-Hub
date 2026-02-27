@@ -4,6 +4,7 @@ import {
 	drawGrid, drawTileLayer, drawAsset, drawStationOverlay,
 	loadProperty, saveProperty, loadTileCatalog, loadAnimatedFiles,
 	screenToGrid, inBounds, fetchStates,
+	authHeaders, setupAuthUI,
 } from "./editor-shared.js";
 import { getApproachDirectionFor } from "../../viewer/station-logic.js";
 
@@ -88,8 +89,14 @@ document.addEventListener("keyup", (e) => {
 document.getElementById("btn-save").onclick = async () => {
 	statusEl.textContent = "Saving to default...";
 	try {
-		await saveProperty(null, property);
-		statusEl.textContent = `Saved to default (${property.floor.length} floor, ${property.assets.length} assets)`;
+		const res = await saveProperty(null, property);
+		if (res.status === 401) {
+			statusEl.textContent = "Unauthorized — click Login to authenticate";
+		} else if (!res.ok) {
+			statusEl.textContent = `Save failed: ${res.status}`;
+		} else {
+			statusEl.textContent = `Saved ✓ (${property.floor.length} floor, ${property.assets.length} assets)`;
+		}
 	} catch (err) {
 		statusEl.textContent = `Save failed: ${err.message}`;
 	}
@@ -106,11 +113,16 @@ document.getElementById("btn-save-as").onclick = async () => {
 	try {
 		const res = await fetch(`/api/properties/${encodeURIComponent(name)}`, {
 			method: "POST",
-			headers: { "Content-Type": "application/json" },
+			headers: authHeaders(),
 			body: JSON.stringify(property),
 		});
-		if (!res.ok) throw new Error(await res.text());
-		statusEl.textContent = `Saved as "${name}"`;
+		if (res.status === 401) {
+			statusEl.textContent = "Unauthorized — click Login to authenticate";
+		} else if (!res.ok) {
+			statusEl.textContent = `Save failed: ${res.status}`;
+		} else {
+			statusEl.textContent = `Saved as "${name}" ✓`;
+		}
 	} catch (err) {
 		statusEl.textContent = `Save failed: ${err.message}`;
 	}
@@ -164,11 +176,16 @@ document.getElementById("btn-use-as-default").onclick = async () => {
 	try {
 		const res = await fetch("/api/property/set-default", {
 			method: "POST",
-			headers: { "Content-Type": "application/json" },
+			headers: authHeaders(),
 			body: JSON.stringify(property),
 		});
-		if (!res.ok) throw new Error(await res.text());
-		statusEl.textContent = "Set as default property";
+		if (res.status === 401) {
+			statusEl.textContent = "Unauthorized — click Login to authenticate";
+		} else if (!res.ok) {
+			statusEl.textContent = `Failed: ${res.status}`;
+		} else {
+			statusEl.textContent = "Set as default property ✓";
+		}
 	} catch (err) {
 		statusEl.textContent = `Failed: ${err.message}`;
 	}
@@ -887,6 +904,7 @@ function render() {
 // --- Init ---
 
 async function init() {
+	setupAuthUI();
 	statusEl.textContent = "Loading assets...";
 	await Promise.all([loadTilesets(), fetchStates()]);
 	catalog = await loadTileCatalog();

@@ -34,6 +34,7 @@ const animatedImages = new Map();
 const cutoutImages = new Map();
 const characterSprites = {}; // { charName: { pose: Image } }
 let animTime = 0;
+const signalFlash = new Map(); // station -> Date.now() of last fire
 
 // Single property state
 let property = null;            // property data (v2 format)
@@ -179,6 +180,7 @@ function connect() {
         for (const [, occ] of stationOccupants) occ.delete(msg.agent_id);
         break;
       case "signal":
+        if (msg.station) signalFlash.set(msg.station, Date.now());
         if (msg.payload !== undefined) {
           handleSignalWithPayload(msg);
         }
@@ -456,22 +458,43 @@ function drawAssetIndicators(asset, propX, propY) {
     return;
   }
 
-  // Signal: expanding ring
+  // Signal indicator
   if (asset.trigger) {
-    const interval = asset.trigger_interval || 60;
-    const speed = Math.max(0.5, 6 / interval);
     const cx = px + pw / 2;
     const cy = py + TILE_SIZE / 2;
-    const phase = (animTime * speed) % 1;
-    const radius = 4 + phase * 12;
-    const alpha = 0.6 * (1 - phase);
-    ctx.strokeStyle = asset.trigger === 'heartbeat'
-      ? `rgba(80, 160, 255, ${alpha})`
-      : `rgba(255, 160, 50, ${alpha})`;
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-    ctx.stroke();
+
+    if (asset.trigger === 'manual') {
+      // Manual: static dot, expanding ring only when recently fired
+      const lastFire = signalFlash.get(asset.station) || 0;
+      const elapsed = Date.now() - lastFire;
+      if (elapsed < 2000) {
+        const phase = (animTime * 4) % 1;
+        const radius = 4 + phase * 12;
+        const alpha = 0.6 * (1 - phase);
+        ctx.strokeStyle = `rgba(255, 160, 50, ${alpha})`;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+        ctx.stroke();
+      } else {
+        ctx.fillStyle = 'rgba(255, 160, 50, 0.7)';
+        ctx.beginPath();
+        ctx.arc(cx, cy, 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else {
+      // Heartbeat: continuous expanding ring
+      const interval = asset.trigger_interval || 60;
+      const speed = Math.max(0.5, 6 / interval);
+      const phase = (animTime * speed) % 1;
+      const radius = 4 + phase * 12;
+      const alpha = 0.6 * (1 - phase);
+      ctx.strokeStyle = `rgba(80, 160, 255, ${alpha})`;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+      ctx.stroke();
+    }
     return;
   }
 

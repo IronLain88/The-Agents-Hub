@@ -197,6 +197,39 @@ export function drawStationOverlay(ctx, asset, zoom) {
 	}
 }
 
+// --- Auth ---
+
+export function getApiKey() { return localStorage.getItem("editor_api_key") || ""; }
+export function setApiKey(key) { localStorage.setItem("editor_api_key", key); }
+export function clearApiKey() { localStorage.removeItem("editor_api_key"); }
+
+export function authHeaders() {
+	const key = getApiKey();
+	const h = { "Content-Type": "application/json" };
+	if (key) h["Authorization"] = `Bearer ${key}`;
+	return h;
+}
+
+export function setupAuthUI() {
+	const el = document.getElementById("auth-status");
+	if (!el) return;
+	const render = () => {
+		const key = getApiKey();
+		el.textContent = key ? "🔓 Logged in" : "🔒 Login";
+		el.title = key ? "Click to log out" : "Click to enter API key";
+	};
+	el.onclick = () => {
+		if (getApiKey()) {
+			clearApiKey();
+		} else {
+			const key = prompt("Enter API key:");
+			if (key?.trim()) setApiKey(key.trim());
+		}
+		render();
+	};
+	render();
+}
+
 // --- Hub API ---
 
 export async function loadProperty() {
@@ -206,12 +239,11 @@ export async function loadProperty() {
 }
 
 export async function saveProperty(_unused, property) {
-	const res = await fetch("/api/property", {
+	return fetch("/api/property", {
 		method: "POST",
-		headers: { "Content-Type": "application/json" },
+		headers: authHeaders(),
 		body: JSON.stringify(property),
 	});
-	return res.json();
 }
 
 export async function loadTileCatalog() {
