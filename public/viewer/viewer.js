@@ -955,6 +955,31 @@ function showInboxMessages(asset) {
     input.addEventListener('keydown', e => { if (e.key === 'Enter') btn.click(); });
     form.appendChild(input);
     form.appendChild(btn);
+
+    if (messages.length > 0) {
+      const clearBtn = document.createElement('button');
+      clearBtn.textContent = 'Clear all';
+      clearBtn.style.cssText = 'background:#5a3a3a;color:#ccc;border:none;border-radius:4px;padding:6px 12px;cursor:pointer;font-family:monospace;font-size:12px;';
+      clearBtn.onclick = async () => {
+        clearBtn.disabled = true;
+        try {
+          const res = await fetch(`${HUB_HTTP_URL}/api/inbox`, {
+            method: 'DELETE',
+            headers: CONFIG.apiKey ? { Authorization: `Bearer ${CONFIG.apiKey}` } : {},
+          });
+          if (res.ok) {
+            const modal = document.getElementById('station-modal');
+            if (modal) modal.remove();
+            const prop = await fetch(`${HUB_HTTP_URL}/api/property`).then(r => r.json());
+            const refreshed = prop.assets?.find(a => a.station === 'inbox');
+            if (refreshed) showInboxMessages(refreshed);
+          }
+        } catch { /* ignore */ }
+        clearBtn.disabled = false;
+      };
+      form.appendChild(clearBtn);
+    }
+
     box.appendChild(form);
   });
 }
@@ -988,16 +1013,31 @@ function showStationInfo(asset) {
   const desc = STATION_DESCRIPTIONS[station] || "A station where agents perform work.";
   const icon = station === 'idle' ? '💤' : station.includes('writing') ? '✍️' : station.includes('reading') ? '📚' : station.includes('thinking') ? '💭' : station.includes('planning') ? '📋' : '⚙️';
 
-  let setup = 'HOW TO SET UP:\n\n';
-  setup += '1. In Property Editor, place furniture\n';
-  setup += '2. Select it and set "Station" field to:\n';
-  setup += `   station="${station}"\n\n`;
-  setup += '3. Agents will walk here when calling:\n';
-  setup += `   update_state({ state: "${station}" })\n\n`;
-  setup += 'TIP: You can create custom states by\n';
-  setup += 'using any station name you want!';
+  // Agent presence
+  let text = desc + '\n';
+  const here = [];
+  for (const [, agent] of agents) {
+    if (agent.state === station) here.push(agent);
+  }
+  if (here.length) {
+    text += '\n' + here.map(a => `${a.agent_name || a.agent_id} is here — ${a.detail || station}`).join('\n');
+  } else {
+    text += '\nNo one here right now.';
+  }
 
-  showModal(`${icon} ${station.replace(/_/g, ' ')} Station`, desc, false, setup);
+  // Board content
+  if (asset.content?.data) {
+    const data = asset.content.data;
+    const type = asset.content.type || 'text';
+    text += `\n\n── Board ──\n${typeof data === 'string' ? data : JSON.stringify(data, null, 2)}`;
+    if (asset.content.publishedAt) {
+      text += `\n\nUpdated: ${new Date(asset.content.publishedAt).toLocaleString()}`;
+    }
+  }
+
+  const setup = `HOW TO SET UP:\n\n1. In Property Editor, place furniture\n2. Set "Station" field to: "${station}"\n3. Agents walk here when calling:\n   update_state({ state: "${station}" })`;
+
+  showModal(`${icon} ${station.replace(/_/g, ' ')}`, text, true, setup);
 }
 
 function showSignalInfo(asset) {
@@ -1642,6 +1682,34 @@ function showModal(title, content, scrollable = false, setupInstructions = null,
   });
 }
 
+function showWelcome() {
+  if (localStorage.getItem('the-agents-visited')) return;
+  const overlay = document.createElement('div');
+  overlay.style.cssText = `
+    position:fixed;top:0;left:0;right:0;bottom:0;
+    background:rgba(0,0,0,0.75);display:flex;align-items:center;justify-content:center;z-index:3000;
+  `;
+  const box = document.createElement('div');
+  box.style.cssText = `
+    background:#222240;border:1px solid #3a3a5a;border-radius:8px;padding:24px 32px;
+    max-width:420px;color:#ccc;font-family:monospace;font-size:14px;line-height:1.7;text-align:center;
+  `;
+  box.innerHTML = `
+    <div style="font-size:20px;font-weight:bold;color:#fff;margin-bottom:12px;">Welcome</div>
+    <div>This is an agent's workspace.<br>Click furniture to see what's happening.<br>Agents walk to stations as they work.</div>
+    <div style="margin-top:16px;color:#666;font-size:12px;">Click anywhere to continue</div>
+  `;
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+  const dismiss = () => {
+    overlay.remove();
+    localStorage.setItem('the-agents-visited', '1');
+    document.removeEventListener('keydown', dismiss);
+  };
+  overlay.addEventListener('click', dismiss);
+  document.addEventListener('keydown', dismiss);
+}
+
 window.addEventListener("resize", resize);
 resize();
 
@@ -1652,4 +1720,5 @@ document.addEventListener("keydown", (e) => {
 loadAssets().then(() => {
   connect();
   requestAnimationFrame(loop);
+  showWelcome();
 });
