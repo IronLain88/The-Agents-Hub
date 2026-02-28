@@ -10,6 +10,7 @@ node_modules/
 # Data files (runtime generated)
 data/*
 !data/property.json
+!data/tile_catalog.json
 
 # Logs
 *.log

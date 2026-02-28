@@ -1,5 +1,6 @@
 node_modules
 data/*
 !data/property.json
+!data/tile_catalog.json
 .env
 *.md

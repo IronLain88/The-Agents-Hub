@@ -51,14 +51,18 @@ function populateTilesetDropdown() {
 	}
 }
 
-tilesetSelect.onchange = () => {
+function onTilesetChange() {
+	if (selectedTileset === tilesetSelect.value) return;
 	selectedTileset = tilesetSelect.value;
 	selection = null;
 	selectedAnimFile = null;
-	approachPos = null;
+	approachPositions = [null, null, null];
+	document.getElementById("tileset-wrap").scrollTop = 0;
 	renderTileset();
 	renderApproachPreview();
-};
+}
+tilesetSelect.onchange = onTilesetChange;
+tilesetSelect.oninput = onTilesetChange;
 
 document.getElementById("grid-offset-x").oninput = (e) => {
 	gridOffsetX = parseInt(e.target.value) || 0;
@@ -73,10 +77,13 @@ function renderTileset() {
 	const img = getTilesetImage(selectedTileset);
 	if (!img) { tilesetCanvas.width = 0; return; }
 	const scale = 2;
-	tilesetCanvas.width = img.naturalWidth * scale;
-	tilesetCanvas.height = img.naturalHeight * scale;
+	const w = img.naturalWidth * scale;
+	const h = img.naturalHeight * scale;
+	if (tilesetCanvas.width !== w) tilesetCanvas.width = w;
+	if (tilesetCanvas.height !== h) tilesetCanvas.height = h;
+	tilesetCtx.clearRect(0, 0, w, h);
 	tilesetCtx.imageSmoothingEnabled = false;
-	tilesetCtx.drawImage(img, 0, 0, tilesetCanvas.width, tilesetCanvas.height);
+	tilesetCtx.drawImage(img, 0, 0, w, h);
 
 	// Draw grid overlay with offset
 	if (gridOffsetX !== 0 || gridOffsetY !== 0) {
@@ -151,7 +158,7 @@ function updateConfigFromSelection() {
 		document.getElementById("cfg-label").value = "";
 	}
 	document.getElementById("cfg-category").value = "Furniture";
-	document.getElementById("cfg-signal").value = "";
+	document.getElementById("cfg-special").value = "inbox";
 	document.getElementById("cfg-interval").value = "1";
 	document.getElementById("cfg-interval-label").style.display = "none";
 	approachPositions = [null, null, null];
@@ -229,10 +236,10 @@ document.getElementById("cfg-approach").addEventListener("change", () => {
 	updatePosButtons();
 	renderApproachPreview();
 });
-document.getElementById("cfg-signal").addEventListener("change", () => {
-	const signalValue = document.getElementById("cfg-signal").value;
+document.getElementById("cfg-special").addEventListener("change", () => {
+	const specialValue = document.getElementById("cfg-special").value;
 	const intervalLabel = document.getElementById("cfg-interval-label");
-	intervalLabel.style.display = signalValue === "interval" ? "" : "none";
+	intervalLabel.style.display = specialValue === "signal-heartbeat" ? "" : "none";
 });
 document.getElementById("cfg-pose").addEventListener("change", renderApproachPreview);
 document.getElementById("cfg-facing").addEventListener("change", renderApproachPreview);
@@ -278,7 +285,7 @@ function buildAnimatedList() {
 			document.getElementById("cfg-w").value = "1";
 			document.getElementById("cfg-h").value = "2";
 			document.getElementById("cfg-category").value = "Furniture";
-			document.getElementById("cfg-signal").value = "";
+			document.getElementById("cfg-special").value = "inbox";
 			document.getElementById("cfg-interval").value = "1";
 			document.getElementById("cfg-interval-label").style.display = "none";
 			buildConfigCategoryTabs();
@@ -503,7 +510,7 @@ function buildConfigCategoryTabs() {
 	const input = document.getElementById("cfg-category");
 	const current = input.value.trim();
 
-	const categories = ["Furniture", "Floors", "Walls", "Decorations", "Signals"];
+	const categories = ["Furniture", "Floors", "Walls", "Decorations", "Special"];
 
 	for (const name of categories) {
 		const btn = document.createElement("button");
@@ -522,18 +529,18 @@ function buildConfigCategoryTabs() {
 function updateFieldVisibility() {
 	const category = document.getElementById("cfg-category").value;
 
-	// Fields that only show for Furniture and Signals
-	const furnitureOnly = category === "Furniture" || category === "Signals";
-	document.getElementById("cfg-station-label").style.display = furnitureOnly ? "" : "none";
-	document.getElementById("cfg-approach-label").style.display = furnitureOnly ? "" : "none";
-	document.getElementById("cfg-pose-label").style.display = furnitureOnly ? "" : "none";
-	document.getElementById("cfg-facing-label").style.display = furnitureOnly ? "" : "none";
+	const isFurniture = category === "Furniture";
+	const isSpecial = category === "Special";
 
-	// Signal fields only show for Signals category
-	const isSignals = category === "Signals";
-	document.getElementById("cfg-signal-label").style.display = isSignals ? "" : "none";
-	// Interval visibility is handled by the signal dropdown change event
-	if (!isSignals) {
+	// Station/approach/pose/facing only show for Furniture (not Special — station is auto-set there)
+	document.getElementById("cfg-station-label").style.display = isFurniture ? "" : "none";
+	document.getElementById("cfg-approach-label").style.display = isFurniture || isSpecial ? "" : "none";
+	document.getElementById("cfg-pose-label").style.display = isFurniture ? "" : "none";
+	document.getElementById("cfg-facing-label").style.display = isFurniture ? "" : "none";
+
+	// Special type fields only show for Special category
+	document.getElementById("cfg-special-label").style.display = isSpecial ? "" : "none";
+	if (!isSpecial) {
 		document.getElementById("cfg-interval-label").style.display = "none";
 	}
 }
@@ -669,11 +676,14 @@ function buildCatalogItems() {
 			}
 			document.getElementById("cfg-label").value = tile.label || "";
 			document.getElementById("cfg-station").value = tile.station || "";
-			// Load signal fields
-			const signalValue = !tile.trigger ? "" : tile.trigger === "manual" ? "manual" : "interval";
-			document.getElementById("cfg-signal").value = signalValue;
+			// Load special type fields
+			const specialValue = tile.trigger === "manual" ? "signal-manual"
+				: tile.trigger === "heartbeat" ? "signal-heartbeat"
+				: tile.station === "inbox" ? "inbox"
+				: "news-desk";
+			document.getElementById("cfg-special").value = specialValue;
 			document.getElementById("cfg-interval").value = tile.trigger_interval || 1;
-			document.getElementById("cfg-interval-label").style.display = signalValue === "interval" ? "" : "none";
+			document.getElementById("cfg-interval-label").style.display = specialValue === "signal-heartbeat" ? "" : "none";
 			document.getElementById("cfg-approach").value = tile.approach || "below";
 			document.getElementById("cfg-pose").value = tile.pose || "idle";
 			document.getElementById("cfg-facing").value = tile.facing || "auto";
@@ -737,12 +747,30 @@ function applyTileMetadata(tile) {
 	}
 	if (collision) tile.collision = collision;
 
-	const signalValue = document.getElementById("cfg-signal").value;
-	if (signalValue === "interval") {
-		tile.trigger = "heartbeat";
-		tile.trigger_interval = parseInt(document.getElementById("cfg-interval").value) || 1;
-	} else if (signalValue === "manual") {
-		tile.trigger = "manual";
+	// Walls category: set layer and default collision
+	const category = document.getElementById("cfg-category").value.trim();
+	if (category === "Walls") {
+		tile.layer = "wall";
+		if (!tile.collision) tile.collision = "solid";
+	}
+
+	if (category === "Special") {
+		const specialValue = document.getElementById("cfg-special").value;
+		const label = document.getElementById("cfg-label").value.trim();
+		if (specialValue === "signal-heartbeat") {
+			tile.trigger = "heartbeat";
+			tile.trigger_interval = parseInt(document.getElementById("cfg-interval").value) || 1;
+			tile.station = label || "Signal";
+		} else if (specialValue === "signal-manual") {
+			tile.trigger = "manual";
+			tile.station = label || "Signal";
+		} else if (specialValue === "inbox") {
+			tile.station = "inbox";
+		} else if (specialValue === "news-desk") {
+			tile.station = label || "News Desk";
+		}
+		const approach = document.getElementById("cfg-approach").value;
+		if (approach) tile.approach = approach;
 	}
 }
 
@@ -787,7 +815,9 @@ document.getElementById("btn-add").onclick = () => {
 
 // --- Save / Export / Import ---
 
-document.getElementById("btn-save").onclick = async () => {
+const saveBtn = document.getElementById("btn-save");
+saveBtn.onclick = async () => {
+	saveBtn.disabled = true;
 	try {
 		const res = await fetch("/api/tile-catalog", {
 			method: "POST",
@@ -795,16 +825,31 @@ document.getElementById("btn-save").onclick = async () => {
 			body: JSON.stringify(catalog),
 		});
 		if (res.status === 401) {
+			flashButton(saveBtn, false);
 			statusEl.textContent = "Unauthorized — click Login to authenticate";
 		} else if (!res.ok) {
+			flashButton(saveBtn, false);
 			statusEl.textContent = `Save failed: ${res.status}`;
 		} else {
+			flashButton(saveBtn, true);
 			statusEl.textContent = "Catalog saved ✓";
 		}
 	} catch (err) {
+		flashButton(saveBtn, false);
 		statusEl.textContent = `Save error: ${err.message}`;
 	}
+	saveBtn.disabled = false;
 };
+
+function flashButton(btn, success) {
+	const color = success ? "#2a2" : "#a22";
+	btn.style.background = color;
+	btn.textContent = success ? "Saved ✓" : "Failed ✗";
+	setTimeout(() => {
+		btn.style.background = "";
+		btn.textContent = "Save Catalog";
+	}, 1500);
+}
 
 document.getElementById("btn-export").onclick = () => {
 	const blob = new Blob([JSON.stringify(catalog, null, "\t")], { type: "application/json" });

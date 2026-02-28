@@ -2,6 +2,33 @@
 const CONFIG = window.VILLAGE_CONFIG || {};
 const urlParams = new URLSearchParams(window.location.search);
 if (urlParams.get('apiKey')) CONFIG.apiKey = urlParams.get('apiKey');
+if (!CONFIG.apiKey) CONFIG.apiKey = localStorage.getItem("editor_api_key") || "";
+
+// Auth UI
+{
+  const el = document.getElementById("auth-status");
+  if (el) {
+    const render = () => {
+      const key = CONFIG.apiKey;
+      el.textContent = key ? "\ud83d\udd13 Logged in" : "\ud83d\udd12 Login";
+      el.title = key ? "Click to log out" : "Click to enter API key";
+    };
+    el.onclick = () => {
+      if (CONFIG.apiKey) {
+        CONFIG.apiKey = "";
+        localStorage.removeItem("editor_api_key");
+      } else {
+        const key = prompt("Enter API key:");
+        if (key?.trim()) {
+          CONFIG.apiKey = key.trim();
+          localStorage.setItem("editor_api_key", key.trim());
+        }
+      }
+      render();
+    };
+    render();
+  }
+}
 const HUB_WS_URL = CONFIG.hubWsUrl || `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}`;
 const HUB_HTTP_URL = CONFIG.hubHttpUrl || '';
 const ASSET_BASE = CONFIG.assetBase || '/assets';
@@ -390,8 +417,10 @@ function drawPropertyTiles() {
 
   drawTileLayer(property.objects, 0, 0);
 
-  // Static tileset and cutout assets
+  // Static tileset and cutout assets — walls first, then furniture
+  for (const isWallPass of [true, false]) {
   for (const asset of property.assets || []) {
+    if ((asset.layer === 'wall') !== isWallPass) continue;
     if (!asset.position || asset.sprite?.file) continue;
     const sprite = asset.sprite;
     if (sprite?.cutout) {
@@ -421,6 +450,7 @@ function drawPropertyTiles() {
       }
     }
     drawAssetIndicators(asset, 0, 0);
+  }
   }
 }
 
@@ -888,6 +918,7 @@ function findAssetAt(worldX, worldY) {
   const tileX = Math.floor(worldX / TILE_SIZE);
   const tileY = Math.floor(worldY / TILE_SIZE);
 
+  let wallHit = null;
   for (const asset of property.assets) {
     if (!asset.position) continue;
     const ax = asset.position.x;
@@ -895,10 +926,11 @@ function findAssetAt(worldX, worldY) {
     const w = asset.sprite?.width || 1;
     const h = asset.sprite?.height || 1;
     if (tileX >= ax && tileX < ax + w && tileY >= ay && tileY < ay + h) {
+      if (asset.layer === 'wall') { wallHit = wallHit || asset; continue; }
       return asset;
     }
   }
-  return null;
+  return wallHit;
 }
 
 async function handleCanvasClick(e) {
@@ -923,7 +955,7 @@ async function handleCanvasClick(e) {
     await showRemoteBoard(asset);
   } else if (asset.station) {
     showStationInfo(asset);
-  } else {
+  } else if (!asset.layer) {
     showModal(asset.name || 'Furniture', 'A piece of furniture on the property.');
   }
 }

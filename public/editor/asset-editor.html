@@ -61,11 +61,12 @@
 					<input type="hidden" id="cfg-category" value="Furniture">
 					<label id="cfg-station-label">Station <input type="text" id="cfg-station" placeholder="e.g. writing_code" list="station-list"></label>
 					<datalist id="station-list"></datalist>
-					<label id="cfg-signal-label">Signal
-						<select id="cfg-signal">
-							<option value="">none</option>
-							<option value="interval">interval</option>
-							<option value="manual">manual</option>
+					<label id="cfg-special-label">Type
+						<select id="cfg-special">
+							<option value="inbox">Inbox</option>
+							<option value="news-desk">News Desk</option>
+							<option value="signal-manual">Signal Manual</option>
+							<option value="signal-heartbeat">Signal Heartbeat</option>
 						</select>
 					</label>
 					<label id="cfg-interval-label" style="display:none">Interval (min) <input type="number" id="cfg-interval" value="1" min="1"></label>

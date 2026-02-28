@@ -1,0 +1,292 @@
+{
+	"categories": [
+		{
+			"name": "Walls",
+			"tiles": [
+				{
+					"src": "concrete_2",
+					"tx": 2,
+					"ty": 0,
+					"w": 1,
+					"h": 2,
+					"label": "Concrete_Left",
+					"collision": "solid"
+				},
+				{
+					"src": "concrete_2",
+					"tx": 0,
+					"ty": 0,
+					"w": 1,
+					"h": 2,
+					"label": "Concrete_Right",
+					"collision": "solid"
+				},
+				{
+					"src": "office_16x16",
+					"tx": 6,
+					"ty": 3,
+					"w": 1,
+					"h": 2,
+					"label": "Wall_Wood",
+					"collision": "solid"
+				},
+				{
+					"src": "concrete_2",
+					"tx": 1,
+					"ty": 0,
+					"w": 1,
+					"h": 2,
+					"label": "Concrete_Middle",
+					"ox": -10,
+					"collision": "solid"
+				},
+				{
+					"src": "office_16x16",
+					"tx": 5,
+					"ty": 5,
+					"w": 3,
+					"h": 2,
+					"label": "Outside_Wall",
+					"collision": "solid"
+				},
+				{
+					"src": "office_16x16",
+					"tx": 2,
+					"ty": 7,
+					"w": 1,
+					"h": 2,
+					"label": "Wall_2",
+					"collision": "solid"
+				},
+				{
+					"src": "office_16x16",
+					"tx": 5,
+					"ty": 7,
+					"w": 3,
+					"h": 2,
+					"label": "Glass_Wall"
+				}
+			]
+		},
+		{
+			"name": "Floors",
+			"tiles": [
+				{
+					"src": "office_16x16",
+					"tx": 10,
+					"ty": 7,
+					"w": 1,
+					"h": 1,
+					"label": "floor_Wood_1"
+				},
+				{
+					"src": "office_16x16",
+					"tx": 10,
+					"ty": 6,
+					"w": 1,
+					"h": 1,
+					"label": "Concrete_floor"
+				},
+				{
+					"src": "office_16x16",
+					"tx": 8,
+					"ty": 7,
+					"w": 1,
+					"h": 1,
+					"label": "Plate_Floor"
+				},
+				{
+					"src": "office_16x16",
+					"tx": 11,
+					"ty": 7,
+					"w": 1,
+					"h": 1,
+					"label": "floor_parket_1"
+				},
+				{
+					"src": "office_16x16",
+					"tx": 11,
+					"ty": 8,
+					"w": 1,
+					"h": 1,
+					"label": "Floor_parket_2"
+				},
+				{
+					"src": "office_16x16",
+					"tx": 9,
+					"ty": 7,
+					"w": 1,
+					"h": 1,
+					"label": "floor_pallets"
+				}
+			]
+		},
+		{
+			"name": "Furniture",
+			"tiles": [
+				{
+					"src": "office_16x16",
+					"tx": 10,
+					"ty": 0,
+					"w": 2,
+					"h": 2,
+					"label": "Desk_wiriting_Text",
+					"station": "writing_text",
+					"facing": "up",
+					"approach": "on",
+					"approaches": [
+						{
+							"x": 0.5,
+							"y": 1.5,
+							"dir": "on"
+						}
+					],
+					"collision": "solid"
+				},
+				{
+					"src": "office_16x16",
+					"tx": 10,
+					"ty": 2,
+					"w": 2,
+					"h": 2,
+					"label": "Computer_Writing_Code",
+					"station": "writing_code",
+					"facing": "up",
+					"approach": "on",
+					"approaches": [
+						{
+							"x": 0.5,
+							"y": 1.5,
+							"dir": "on"
+						}
+					],
+					"collision": "solid"
+				},
+				{
+					"src": "office_16x16",
+					"tx": 8,
+					"ty": 2,
+					"w": 2,
+					"h": 2,
+					"label": "Pinwall_Planning",
+					"station": "planning",
+					"facing": "up",
+					"approach": "below",
+					"approaches": [
+						{
+							"x": 0.5,
+							"y": 2,
+							"dir": "below"
+						}
+					]
+				},
+				{
+					"src": "office_16x16",
+					"tx": 12,
+					"ty": 4,
+					"w": 2,
+					"h": 2,
+					"label": "Couch_Idle",
+					"station": "idle",
+					"approach": "on",
+					"approaches": [
+						{
+							"x": 0.5,
+							"y": 1,
+							"dir": "on"
+						}
+					],
+					"collision": "solid"
+				},
+				{
+					"src": "office_16x16",
+					"tx": 12,
+					"ty": 2,
+					"w": 1,
+					"h": 2,
+					"label": "Bookshelf_reading",
+					"station": "reading",
+					"approach": "below",
+					"collision": "solid"
+				},
+				{
+					"src": "office_16x16",
+					"tx": 10,
+					"ty": 4,
+					"w": 2,
+					"h": 2,
+					"label": "Whiteboard_thinking",
+					"station": "thinking",
+					"approach": "below",
+					"collision": "solid"
+				},
+				{
+					"src": "office_16x16",
+					"tx": 8,
+					"ty": 4,
+					"w": 2,
+					"h": 2,
+					"label": "Wall_Refelcting",
+					"station": "reflecting",
+					"approach": "below"
+				},
+				{
+					"src": "office_16x16",
+					"tx": 10,
+					"ty": 4,
+					"w": 2,
+					"h": 2,
+					"label": "Inbox",
+					"station": "inbox",
+					"approach": "below"
+				}
+			]
+		},
+		{
+			"name": "Animated",
+			"tiles": []
+		},
+		{
+			"name": "Signals",
+			"tiles": [
+				{
+					"src": "office_16x16",
+					"tx": 13,
+					"ty": 2,
+					"w": 1,
+					"h": 2,
+					"label": "Manual_Signal",
+					"collision": "solid",
+					"trigger": "manual"
+				},
+				{
+					"src": "office_16x16",
+					"tx": 14,
+					"ty": 2,
+					"w": 1,
+					"h": 2,
+					"label": "Hearthbeat",
+					"collision": "solid",
+					"trigger": "heartbeat",
+					"trigger_interval": 1
+				}
+			]
+		},
+		{
+			"name": "Special",
+			"tiles": [
+				{
+					"src": "office_16x16",
+					"tx": 10,
+					"ty": 0,
+					"w": 2,
+					"h": 2,
+					"label": "News_Desk",
+					"collision": "solid",
+					"station": "News_Desk",
+					"approach": "below"
+				}
+			]
+		}
+	]
+}

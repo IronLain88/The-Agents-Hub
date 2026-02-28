@@ -10,7 +10,6 @@ import { getApproachDirectionFor } from "../../viewer/station-logic.js";
 
 // --- State ---
 let tool = "paint";    // paint | erase | select
-let layer = "floor";   // floor | assets | collision
 let catalog = { categories: [] };
 let animatedFiles = [];
 let selectedPalette = null; // { src, tx, ty, w, h, label, station, approach, collision, file }
@@ -45,9 +44,6 @@ const selectForm = document.getElementById("select-form");
 document.getElementById("tool-paint").onclick = () => setTool("paint");
 document.getElementById("tool-erase").onclick = () => setTool("erase");
 document.getElementById("tool-select").onclick = () => setTool("select");
-document.getElementById("layer-floor").onclick = () => setLayer("floor");
-document.getElementById("layer-assets").onclick = () => setLayer("assets");
-document.getElementById("layer-collision").onclick = () => setLayer("collision");
 
 function setTool(t) {
 	tool = t;
@@ -58,14 +54,6 @@ function setTool(t) {
 	if (t !== "select") { selectedAssetIndex = -1; hideSelectInfo(); }
 }
 
-function setLayer(l) {
-	layer = l;
-	document.getElementById("layer-floor").classList.toggle("active", l === "floor");
-	document.getElementById("layer-assets").classList.toggle("active", l === "assets");
-	document.getElementById("layer-collision").classList.toggle("active", l === "collision");
-	selectedAssetIndex = -1;
-	hideSelectInfo();
-}
 
 document.addEventListener("keydown", (e) => {
 	if (e.target.tagName === "INPUT") return;
@@ -86,47 +74,39 @@ document.addEventListener("keyup", (e) => {
 });
 
 // --- Save / Load ---
-document.getElementById("btn-save").onclick = async () => {
-	statusEl.textContent = "Saving to default...";
+const saveBtn = document.getElementById("btn-save");
+saveBtn.onclick = async () => {
+	statusEl.textContent = "Saving...";
+	saveBtn.disabled = true;
 	try {
 		const res = await saveProperty(null, property);
 		if (res.status === 401) {
+			flashButton(saveBtn, false);
 			statusEl.textContent = "Unauthorized — click Login to authenticate";
 		} else if (!res.ok) {
+			flashButton(saveBtn, false);
 			statusEl.textContent = `Save failed: ${res.status}`;
 		} else {
+			flashButton(saveBtn, true);
 			statusEl.textContent = `Saved ✓ (${property.floor.length} floor, ${property.assets.length} assets)`;
 		}
 	} catch (err) {
+		flashButton(saveBtn, false);
 		statusEl.textContent = `Save failed: ${err.message}`;
 	}
+	saveBtn.disabled = false;
 };
 
-document.getElementById("btn-save-as").onclick = async () => {
-	const name = prompt("Enter a name for this property:");
-	if (!name || !name.trim()) {
-		statusEl.textContent = "Save cancelled";
-		return;
-	}
+function flashButton(btn, success) {
+	const color = success ? "#2a2" : "#a22";
+	btn.style.background = color;
+	btn.textContent = success ? "Saved ✓" : "Failed ✗";
+	setTimeout(() => {
+		btn.style.background = "";
+		btn.textContent = "Save";
+	}, 1500);
+}
 
-	statusEl.textContent = `Saving as "${name}"...`;
-	try {
-		const res = await fetch(`/api/properties/${encodeURIComponent(name)}`, {
-			method: "POST",
-			headers: authHeaders(),
-			body: JSON.stringify(property),
-		});
-		if (res.status === 401) {
-			statusEl.textContent = "Unauthorized — click Login to authenticate";
-		} else if (!res.ok) {
-			statusEl.textContent = `Save failed: ${res.status}`;
-		} else {
-			statusEl.textContent = `Saved as "${name}" ✓`;
-		}
-	} catch (err) {
-		statusEl.textContent = `Save failed: ${err.message}`;
-	}
-};
 
 document.getElementById("btn-load").onclick = async () => {
 	try {
@@ -161,61 +141,6 @@ document.getElementById("btn-load").onclick = async () => {
 	}
 };
 
-document.getElementById("btn-use-as-default").onclick = async () => {
-	const confirmed = confirm(
-		`Set current property as default?\n\n` +
-		`This will overwrite the default property with the current one.`
-	);
-
-	if (!confirmed) {
-		statusEl.textContent = "Cancelled";
-		return;
-	}
-
-	statusEl.textContent = "Setting as default...";
-	try {
-		const res = await fetch("/api/property/set-default", {
-			method: "POST",
-			headers: authHeaders(),
-			body: JSON.stringify(property),
-		});
-		if (res.status === 401) {
-			statusEl.textContent = "Unauthorized — click Login to authenticate";
-		} else if (!res.ok) {
-			statusEl.textContent = `Failed: ${res.status}`;
-		} else {
-			statusEl.textContent = "Set as default property ✓";
-		}
-	} catch (err) {
-		statusEl.textContent = `Failed: ${err.message}`;
-	}
-};
-
-document.getElementById("btn-download").onclick = () => {
-	const blob = new Blob([JSON.stringify(property, null, "\t")], { type: "application/json" });
-	const a = document.createElement("a");
-	a.href = URL.createObjectURL(blob);
-	a.download = "property.json";
-	a.click();
-	URL.revokeObjectURL(a.href);
-};
-
-document.getElementById("btn-upload").onclick = () => document.getElementById("file-upload").click();
-document.getElementById("file-upload").onchange = (e) => {
-	const file = e.target.files[0];
-	if (!file) return;
-	const reader = new FileReader();
-	reader.onload = () => {
-		try {
-			applyProperty(JSON.parse(reader.result));
-			statusEl.textContent = `Uploaded ${file.name}`;
-		} catch (err) {
-			statusEl.textContent = `Upload failed: ${err.message}`;
-		}
-	};
-	reader.readAsText(file);
-	e.target.value = "";
-};
 
 document.getElementById("toggle-collision").onclick = () => {
 	showCollision = !showCollision;
@@ -263,7 +188,7 @@ function buildPalette() {
 	if (cat.tiles === null) {
 		// Virtual "all animated" category
 		for (const file of animatedFiles) {
-			const item = createAnimatedPaletteItem(file);
+			const item = createAnimatedPaletteItem(file, null, cat.name);
 			paletteGrid.appendChild(item);
 		}
 		return;
@@ -271,14 +196,14 @@ function buildPalette() {
 
 	for (const tile of cat.tiles) {
 		let item;
-		if (tile.file) item = createAnimatedPaletteItem(tile.file, tile);
-		else if (tile.cutout) item = createCutoutPaletteItem(tile);
-		else item = createTilesetPaletteItem(tile);
+		if (tile.file) item = createAnimatedPaletteItem(tile.file, tile, cat.name);
+		else if (tile.cutout) item = createCutoutPaletteItem(tile, cat.name);
+		else item = createTilesetPaletteItem(tile, cat.name);
 		paletteGrid.appendChild(item);
 	}
 }
 
-function createTilesetPaletteItem(tile) {
+function createTilesetPaletteItem(tile, category) {
 	const item = document.createElement("div");
 	item.className = "palette-item";
 	item.title = tile.label || `${tile.src} [${tile.tx},${tile.ty}]`;
@@ -315,7 +240,7 @@ function createTilesetPaletteItem(tile) {
 	}
 
 	item.onclick = () => {
-		selectedPalette = { ...tile };
+		selectedPalette = { ...tile, _category: category };
 		document.querySelectorAll(".palette-item").forEach(el => el.classList.remove("selected"));
 		item.classList.add("selected");
 		setTool("paint");
@@ -323,7 +248,7 @@ function createTilesetPaletteItem(tile) {
 	return item;
 }
 
-function createCutoutPaletteItem(tile) {
+function createCutoutPaletteItem(tile, category) {
 	const item = document.createElement("div");
 	item.className = "palette-item";
 	item.title = tile.label || tile.cutout;
@@ -356,7 +281,7 @@ function createCutoutPaletteItem(tile) {
 	}
 
 	item.onclick = () => {
-		selectedPalette = { ...tile };
+		selectedPalette = { ...tile, _category: category };
 		document.querySelectorAll(".palette-item").forEach(el => el.classList.remove("selected"));
 		item.classList.add("selected");
 		setTool("paint");
@@ -364,7 +289,7 @@ function createCutoutPaletteItem(tile) {
 	return item;
 }
 
-function createAnimatedPaletteItem(file, catalogTile) {
+function createAnimatedPaletteItem(file, catalogTile, category) {
 	const item = document.createElement("div");
 	item.className = "palette-item";
 	const meta = catalogTile || {};
@@ -408,6 +333,8 @@ function createAnimatedPaletteItem(file, catalogTile) {
 			pose: meta.pose,
 			facing: meta.facing,
 			approaches: meta.approaches,
+			layer: meta.layer,
+			_category: category,
 		};
 		document.querySelectorAll(".palette-item").forEach(el => el.classList.remove("selected"));
 		item.classList.add("selected");
@@ -665,7 +592,9 @@ canvas.addEventListener("pointermove", (e) => {
 	const grid = screenToGrid(e.clientX - rect.left, e.clientY - rect.top, camera);
 	if (!inBounds(grid.x, grid.y)) return;
 
-	if (tool === "paint" && selectedPalette && layer === "floor") {
+	if (tool === "paint" && selectedPalette && selectedPalette._category === "Floors") {
+		paintAt(grid.x, grid.y);
+	} else if (tool === "paint" && showCollision && !selectedPalette) {
 		paintAt(grid.x, grid.y);
 	} else if (tool === "erase" || e.buttons === 2) {
 		eraseAt(grid.x, grid.y);
@@ -680,13 +609,12 @@ canvas.addEventListener("contextmenu", (e) => e.preventDefault());
 function paintAt(gx, gy) {
 	if (!inBounds(gx, gy)) return;
 
-	if (layer === "collision") {
+	if (showCollision && !selectedPalette) {
 		// Paint absolute collision tile
 		if (!property.collision.some(t => t.x === gx && t.y === gy)) {
 			property.collision.push({ x: gx, y: gy });
 		}
-	} else if (layer === "floor") {
-		if (!selectedPalette) return;
+	} else if (selectedPalette?._category === "Floors") {
 		// Remove existing floor tile at this position
 		property.floor = property.floor.filter(t => t.x !== gx || t.y !== gy);
 		property.floor.push({
@@ -725,6 +653,7 @@ function paintAt(gx, gy) {
 		if (selectedPalette.facing) asset.facing = selectedPalette.facing;
 		if (selectedPalette.approaches) asset.approaches = selectedPalette.approaches;
 		if (selectedPalette.collision === "solid") asset.collision = true;
+		if (selectedPalette.layer || selectedPalette._category === "Walls") asset.layer = "wall";
 		// Signal assets: prompt for name, copy trigger fields
 		if (selectedPalette.trigger) {
 			const existing = property.assets.filter(a => a.trigger === selectedPalette.trigger).length;
@@ -740,25 +669,25 @@ function paintAt(gx, gy) {
 }
 
 function eraseAt(gx, gy) {
-	if (layer === "collision") {
+	if (showCollision) {
 		property.collision = property.collision.filter(t => t.x !== gx || t.y !== gy);
-	} else if (layer === "floor") {
-		property.floor = property.floor.filter(t => t.x !== gx || t.y !== gy);
-	} else {
-		// Find and remove asset at position (reverse order to hit topmost first)
-		for (let i = property.assets.length - 1; i >= 0; i--) {
-			const a = property.assets[i];
-			if (!a.position) continue;
-			const w = a.sprite?.width || 1;
-			const h = a.sprite?.height || 1;
-			if (gx >= a.position.x && gx < a.position.x + w &&
-				gy >= a.position.y && gy < a.position.y + h) {
-				property.assets.splice(i, 1);
-				if (selectedAssetIndex === i) { selectedAssetIndex = -1; hideSelectInfo(); }
-				break;
-			}
+		return;
+	}
+	// Try assets first (reverse order to hit topmost first)
+	for (let i = property.assets.length - 1; i >= 0; i--) {
+		const a = property.assets[i];
+		if (!a.position) continue;
+		const w = a.sprite?.width || 1;
+		const h = a.sprite?.height || 1;
+		if (gx >= a.position.x && gx < a.position.x + w &&
+			gy >= a.position.y && gy < a.position.y + h) {
+			property.assets.splice(i, 1);
+			if (selectedAssetIndex === i) { selectedAssetIndex = -1; hideSelectInfo(); }
+			return;
 		}
 	}
+	// No asset found — erase floor tile
+	property.floor = property.floor.filter(t => t.x !== gx || t.y !== gy);
 }
 
 function selectAt(gx, gy) {
@@ -841,9 +770,12 @@ function render() {
 	// Floor
 	drawTileLayer(ctx, property.floor);
 
-	// Assets
+	// Assets — walls first, then furniture
 	for (const asset of property.assets) {
-		drawAsset(ctx, asset);
+		if (asset.layer === 'wall') drawAsset(ctx, asset);
+	}
+	for (const asset of property.assets) {
+		if (asset.layer !== 'wall') drawAsset(ctx, asset);
 	}
 
 	// Collision overlay

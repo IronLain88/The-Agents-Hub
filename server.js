@@ -540,16 +540,10 @@ app.post("/api/assets/:id/log", requireAuth, stateLimiter, (req, res) => {
 const CATALOG_FILE = join(DATA_DIR, "tile_catalog.json");
 
 app.get("/api/tile-catalog", async (_req, res) => {
+  res.set("Cache-Control", "no-cache");
   try {
-    // Try user catalog first, fall back to default
-    try {
-      const data = await readFile(CATALOG_FILE, "utf-8");
-      res.type("json").send(data);
-      return;
-    } catch {
-      const data = await readFile(join(__dirname, "..", "assets", "config", "tile_catalog.json"), "utf-8");
-      res.type("json").send(data);
-    }
+    const data = await readFile(CATALOG_FILE, "utf-8");
+    res.type("json").send(data);
   } catch {
     res.status(404).json({ error: "tile_catalog.json not found" });
   }
