@@ -37,6 +37,7 @@ const CHARACTER_BASE = CONFIG.characterBase || `${ASSET_BASE}/characters`;
 const CHARACTER_NAME = CONFIG.characterName || "Yuki";
 const ANIMATED_BASE = CONFIG.animatedBase || `${ASSET_BASE}/animated`;
 const SPRITE_BASE = CONFIG.spriteBase || `${ASSET_BASE}/sprites`;
+const WALLPAPER_URL = CONFIG.wallpaperUrl || `${ASSET_BASE}/wallpapers/default.png`;
 
 const POSE_SPRITES = {
   idle: "_idle_anim.png",
@@ -60,6 +61,7 @@ const tilesetImages = {};
 const animatedImages = new Map();
 const cutoutImages = new Map();
 const characterSprites = {}; // { charName: { pose: Image } }
+let wallpaperImage = null;
 let animTime = 0;
 const signalFlash = new Map(); // station -> Date.now() of last fire
 
@@ -100,6 +102,14 @@ async function loadAssets() {
       img.src = uri;
     })
   );
+
+  // Load wallpaper
+  promises.push(new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => { wallpaperImage = img; resolve(); };
+    img.onerror = () => resolve();
+    img.src = WALLPAPER_URL;
+  }));
 
   await Promise.all(promises);
   await loadCharacterSprites(CHARACTER_NAME);
@@ -841,8 +851,13 @@ function loop(time) {
     // Draw
     ctx.imageSmoothingEnabled = false;
     ctx.save();
-    ctx.fillStyle = "#0e1e2a";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    // Draw wallpaper or fallback color
+    if (wallpaperImage && wallpaperImage.complete) {
+      ctx.drawImage(wallpaperImage, 0, 0, canvas.width, canvas.height);
+    } else {
+      ctx.fillStyle = "#0e1e2a";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
 
     ctx.translate(canvas.width / 2, canvas.height / 2);
     ctx.scale(camera.zoom, camera.zoom);
