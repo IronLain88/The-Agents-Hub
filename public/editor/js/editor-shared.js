@@ -111,6 +111,15 @@ export const FRAME_STYLES = {
 	black: ['#000000', '#1a1a1a', '#333333'],
 };
 
+export const FEET_H = 14;
+
+export function drawFeet(ctx, dx, dy, w, h, style) {
+	const color = FRAME_STYLES[style]?.[0] || FRAME_STYLES.gold[0];
+	ctx.fillStyle = color;
+	ctx.fillRect(dx + 3, dy + h, 3, FEET_H);
+	ctx.fillRect(dx + w - 6, dy + h, 3, FEET_H);
+}
+
 export function drawFrame(ctx, dx, dy, w, h, p, style) {
 	if (p <= 0) return;
 	const c = FRAME_STYLES[style] || FRAME_STYLES.gold;
@@ -180,6 +189,7 @@ export function drawAsset(ctx, asset) {
 		const dx = asset.position.x * TILE_SIZE + (bw - w) / 2;
 		const dy = asset.position.y * TILE_SIZE + (bh - h) / 2;
 		drawFrame(ctx, dx, dy, w, h, p, sprite.frame);
+		if (sprite.feet) drawFeet(ctx, dx, dy, w, h, sprite.frame);
 		ctx.drawImage(img, 0, 0, img.naturalWidth, img.naturalHeight,
 			dx + p, dy + p, w - p * 2, h - p * 2
 		);

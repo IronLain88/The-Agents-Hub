@@ -61,6 +61,15 @@ const FRAME_STYLES = {
   wood:  ['#3b2507', '#6b4226', '#a0703c'],
   black: ['#000000', '#1a1a1a', '#333333'],
 };
+const FEET_H = 14;
+
+function drawFeet(ctx, dx, dy, w, h, style) {
+  const color = FRAME_STYLES[style]?.[0] || FRAME_STYLES.gold[0];
+  ctx.fillStyle = color;
+  ctx.fillRect(dx + 3, dy + h, 3, FEET_H);
+  ctx.fillRect(dx + w - 6, dy + h, 3, FEET_H);
+}
+
 function drawFrame(ctx, dx, dy, w, h, p, style) {
   if (p <= 0) return;
   const c = FRAME_STYLES[style] || FRAME_STYLES.gold;
@@ -460,6 +469,7 @@ function drawPropertyTiles() {
         const dx = asset.position.x * TILE_SIZE + (bw - w) / 2;
         const dy = asset.position.y * TILE_SIZE + (bh - h) / 2;
         drawFrame(ctx, dx, dy, w, h, p, sprite.frame);
+        if (sprite.feet) drawFeet(ctx, dx, dy, w, h, sprite.frame);
         ctx.drawImage(img, 0, 0, img.naturalWidth, img.naturalHeight,
           dx + p, dy + p, w - p * 2, h - p * 2);
       }

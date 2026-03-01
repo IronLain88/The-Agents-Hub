@@ -3,7 +3,7 @@ import {
 	loadTilesets, getTilesetImage, TILESET_URIS,
 	loadTileCatalog, loadAnimatedFiles, loadAnimatedImage, loadImageAsset,
 	fetchStates, getStatesData,
-	authHeaders, setupAuthUI, drawFrame, FRAME_STYLES,
+	authHeaders, setupAuthUI, drawFrame, drawFeet, FRAME_STYLES, FEET_H,
 } from "./editor-shared.js";
 
 // --- State ---
@@ -249,6 +249,7 @@ document.getElementById("cfg-special").addEventListener("change", () => {
 document.getElementById("cfg-pose").addEventListener("change", renderApproachPreview);
 document.getElementById("cfg-facing").addEventListener("change", renderApproachPreview);
 document.getElementById("cfg-frame").addEventListener("change", renderApproachPreview);
+document.getElementById("cfg-feet").addEventListener("change", renderApproachPreview);
 document.getElementById("cfg-w").addEventListener("input", () => {
 	approachPositions = [null, null, null];
 	placingSlot = -1;
@@ -338,6 +339,7 @@ function buildImageList() {
 			document.getElementById("cfg-label").value = file.replace(/\.[^.]+$/, '');
 			document.getElementById("cfg-w").value = "32";
 			document.getElementById("cfg-h").value = "32";
+			document.getElementById("cfg-feet").checked = false;
 			document.getElementById("cfg-category").value = "Decorations";
 			buildConfigCategoryTabs();
 			updateFieldVisibility();
@@ -458,6 +460,7 @@ function renderApproachPreview() {
 			img.onload = renderApproachPreview;
 		} else if (img.naturalWidth) {
 			const frameStyle = document.getElementById("cfg-frame").value;
+			const hasFeet = document.getElementById("cfg-feet").checked;
 			const pw = rawW * scale;
 			const ph = rawH * scale;
 			// Center within tile-aligned area
@@ -467,6 +470,7 @@ function renderApproachPreview() {
 			const py = assetY * TILE_SIZE * scale + (bh - ph) / 2;
 			const p = frameStyle === "none" ? 0 : 3 * scale;
 			drawFrame(approachCtx, px, py, pw, ph, p, frameStyle);
+			if (hasFeet) drawFeet(approachCtx, px, py, pw, ph, frameStyle);
 			approachCtx.drawImage(img, 0, 0, img.naturalWidth, img.naturalHeight,
 				px + p, py + p, pw - p * 2, ph - p * 2);
 			hasAsset = true;
@@ -649,9 +653,10 @@ function updateFieldVisibility() {
 		document.getElementById("cfg-interval-label").style.display = "none";
 	}
 
-	// Frame selector and px labels only for images
+	// Frame/feet selectors and px labels only for images
 	const isImage = !!selectedImageFile;
 	document.getElementById("cfg-frame-label").style.display = isImage ? "" : "none";
+	document.getElementById("cfg-feet-label").style.display = isImage ? "flex" : "none";
 	document.getElementById("cfg-w-label").textContent = isImage ? "Width (px)" : "Width (tiles)";
 	document.getElementById("cfg-h-label").textContent = isImage ? "Height (px)" : "Height (tiles)";
 }
@@ -814,6 +819,7 @@ function buildCatalogItems() {
 			document.getElementById("cfg-pose").value = tile.pose || "idle";
 			document.getElementById("cfg-facing").value = tile.facing || "auto";
 			document.getElementById("cfg-frame").value = tile.frame || (tile.padding === 0 ? "none" : "gold");
+			document.getElementById("cfg-feet").checked = !!tile.feet;
 			document.getElementById("cfg-collision").value = tile.collision || "";
 			document.getElementById("cfg-w").value = tile.pw || tile.w || 1;
 			document.getElementById("cfg-h").value = tile.ph || tile.h || 1;
@@ -927,8 +933,10 @@ document.getElementById("btn-add").onclick = () => {
 	let tile;
 	if (selectedImageFile) {
 		const frameStyle = document.getElementById("cfg-frame").value;
+		const hasFeet = document.getElementById("cfg-feet").checked;
 		tile = { image: selectedImageFile, pw: w, ph: h, label, padding: frameStyle === "none" ? 0 : 3 };
 		if (frameStyle && frameStyle !== "gold") tile.frame = frameStyle;
+		if (hasFeet) tile.feet = true;
 	} else if (selectedAnimFile) {
 		tile = { file: selectedAnimFile, w, h, label };
 	} else if (selection) {

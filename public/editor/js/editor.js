@@ -150,6 +150,31 @@ document.getElementById("btn-load").onclick = async () => {
 };
 
 
+document.getElementById("btn-export").onclick = () => {
+	const json = JSON.stringify(property, null, 2);
+	const a = document.createElement("a");
+	a.href = URL.createObjectURL(new Blob([json], { type: "application/json" }));
+	a.download = "property.json";
+	a.click();
+};
+
+document.getElementById("btn-import").onclick = () => {
+	document.getElementById("file-import").click();
+};
+
+document.getElementById("file-import").onchange = async (e) => {
+	const file = e.target.files[0];
+	if (!file) return;
+	try {
+		const data = JSON.parse(await file.text());
+		applyProperty(data);
+		statusEl.textContent = `Imported ${file.name}`;
+	} catch {
+		statusEl.textContent = "Import failed — invalid JSON";
+	}
+	e.target.value = "";
+};
+
 document.getElementById("toggle-collision").onclick = () => {
 	showCollision = !showCollision;
 	document.getElementById("toggle-collision").classList.toggle("active", showCollision);
@@ -442,6 +467,7 @@ function createImagePaletteItem(file, catalogTile) {
 			label: meta.label || file,
 			padding: meta.padding ?? 3,
 			frame: meta.frame,
+			feet: meta.feet,
 			_category: "Images",
 		};
 		document.querySelectorAll(".palette-item").forEach(el => el.classList.remove("selected"));
@@ -744,6 +770,7 @@ function paintAt(gx, gy) {
 		} else if (selectedPalette.image) {
 			asset.sprite = { image: selectedPalette.image, pw: selectedPalette.pw || 32, ph: selectedPalette.ph || 32, padding: selectedPalette.padding ?? 3 };
 			if (selectedPalette.frame) asset.sprite.frame = selectedPalette.frame;
+			if (selectedPalette.feet) asset.sprite.feet = true;
 			loadImageAsset(selectedPalette.image);
 		} else if (selectedPalette.cutout) {
 			asset.sprite = { cutout: selectedPalette.cutout, width: selectedPalette.w || 1, height: selectedPalette.h || 1, padding: selectedPalette.padding || 0 };
