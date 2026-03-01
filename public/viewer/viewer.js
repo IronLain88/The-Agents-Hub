@@ -34,7 +34,7 @@ const HUB_HTTP_URL = CONFIG.hubHttpUrl || '';
 const ASSET_BASE = CONFIG.assetBase || '/assets';
 let TILESET_URIS = CONFIG.tilesetUris || {};
 const CHARACTER_BASE = CONFIG.characterBase || `${ASSET_BASE}/characters`;
-const CHARACTER_NAME = CONFIG.characterName || "Yuki";
+const CHARACTER_NAME = CONFIG.characterName || "Aeon";
 const ANIMATED_BASE = CONFIG.animatedBase || `${ASSET_BASE}/animated`;
 const SPRITE_BASE = CONFIG.spriteBase || `${ASSET_BASE}/sprites`;
 
