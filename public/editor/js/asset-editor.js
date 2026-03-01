@@ -1,14 +1,15 @@
 import {
 	TILE_SIZE, STATION_COLORS,
 	loadTilesets, getTilesetImage, TILESET_URIS,
-	loadTileCatalog, loadAnimatedFiles, loadAnimatedImage,
+	loadTileCatalog, loadAnimatedFiles, loadAnimatedImage, loadImageAsset,
 	fetchStates, getStatesData,
-	authHeaders, setupAuthUI,
+	authHeaders, setupAuthUI, drawFrame, FRAME_STYLES,
 } from "./editor-shared.js";
 
 // --- State ---
 let catalog = { categories: [] };
 let animatedFiles = [];
+let imageFiles = [];
 let activeCatalogTab = 0;
 
 // Selection state
@@ -16,6 +17,7 @@ let selectedTileset = "room_builder";
 let selection = null;  // { tx, ty, w, h } tile coords in tileset
 let selectStart = null;
 let selectedAnimFile = null;
+let selectedImageFile = null;
 let gridOffsetX = 0;  // pixel offset for grid alignment
 let gridOffsetY = 0;
 
@@ -125,6 +127,7 @@ tilesetCanvas.addEventListener("pointerdown", (e) => {
 	selectStart = { tx, ty };
 	selection = { tx, ty, w: 1, h: 1 };
 	selectedAnimFile = null;
+	selectedImageFile = null;
 	approachPositions = [null, null, null];
 	placingSlot = -1;
 	renderTileset();
@@ -152,6 +155,8 @@ tilesetCanvas.addEventListener("pointermove", (e) => {
 tilesetCanvas.addEventListener("pointerup", () => { selectStart = null; });
 
 function updateConfigFromSelection() {
+	selectedImageFile = null;
+	buildImageList();
 	if (selection) {
 		document.getElementById("cfg-w").value = selection.w;
 		document.getElementById("cfg-h").value = selection.h;
@@ -172,7 +177,7 @@ function updateConfigFromSelection() {
 // --- Approach canvas click ---
 
 approachCanvas.addEventListener("click", (e) => {
-	if (!selection && !selectedAnimFile) return;
+	if (!selection && !selectedAnimFile && !selectedImageFile) return;
 	if (placingSlot < 0) return;
 	const rect = approachCanvas.getBoundingClientRect();
 	const scale = 4;
@@ -243,6 +248,7 @@ document.getElementById("cfg-special").addEventListener("change", () => {
 });
 document.getElementById("cfg-pose").addEventListener("change", renderApproachPreview);
 document.getElementById("cfg-facing").addEventListener("change", renderApproachPreview);
+document.getElementById("cfg-frame").addEventListener("change", renderApproachPreview);
 document.getElementById("cfg-w").addEventListener("input", () => {
 	approachPositions = [null, null, null];
 	placingSlot = -1;
@@ -276,10 +282,12 @@ function buildAnimatedList() {
 
 		item.onclick = () => {
 			selectedAnimFile = file;
+			selectedImageFile = null;
 			selection = null;
 			approachPositions = [null, null, null];
 			placingSlot = -1;
 			buildAnimatedList();
+			buildImageList();
 			updatePosButtons();
 			document.getElementById("cfg-label").value = file.replace("animated_", "").replace(".png", "");
 			document.getElementById("cfg-w").value = "1";
@@ -296,6 +304,78 @@ function buildAnimatedList() {
 		animatedList.appendChild(item);
 	}
 }
+
+// --- Image browser ---
+
+const imageList = document.getElementById("image-list");
+
+function buildImageList() {
+	imageList.innerHTML = "";
+	for (const file of imageFiles) {
+		const item = document.createElement("div");
+		item.className = "animated-item";
+		if (file === selectedImageFile) item.classList.add("selected");
+
+		const img = document.createElement("img");
+		img.src = `/assets/images/${file}`;
+		img.style.maxHeight = "24px";
+		item.appendChild(img);
+
+		const label = document.createElement("span");
+		label.textContent = file.replace(/\.[^.]+$/, '');
+		label.style.fontSize = "11px";
+		item.appendChild(label);
+
+		item.onclick = () => {
+			selectedImageFile = file;
+			selectedAnimFile = null;
+			selection = null;
+			approachPositions = [null, null, null];
+			placingSlot = -1;
+			buildImageList();
+			buildAnimatedList();
+			updatePosButtons();
+			document.getElementById("cfg-label").value = file.replace(/\.[^.]+$/, '');
+			document.getElementById("cfg-w").value = "32";
+			document.getElementById("cfg-h").value = "32";
+			document.getElementById("cfg-category").value = "Decorations";
+			buildConfigCategoryTabs();
+			updateFieldVisibility();
+			renderTileset();
+			renderApproachPreview();
+		};
+		imageList.appendChild(item);
+	}
+}
+
+document.getElementById("btn-upload-image").onclick = () => {
+	const input = document.createElement("input");
+	input.type = "file";
+	input.accept = "image/*";
+	input.onchange = async () => {
+		const file = input.files[0];
+		if (!file) return;
+		const fname = file.name.replace(/[^a-zA-Z0-9_.-]/g, '_');
+		try {
+			const buf = await file.arrayBuffer();
+			const res = await fetch(`/api/images/${fname}`, {
+				method: "POST",
+				headers: { ...authHeaders(), "Content-Type": "application/octet-stream" },
+				body: buf,
+			});
+			if (res.ok) {
+				if (!imageFiles.includes(fname)) imageFiles.push(fname);
+				buildImageList();
+				statusEl.textContent = `Uploaded ${fname}`;
+			} else {
+				statusEl.textContent = `Upload failed: ${res.status}`;
+			}
+		} catch (err) {
+			statusEl.textContent = `Upload failed: ${err.message}`;
+		}
+	};
+	input.click();
+};
 
 // --- Approach preview helpers ---
 
@@ -330,10 +410,15 @@ function getApproachDirFromPos(pos, w, h) {
 // --- Approach Preview ---
 
 function renderApproachPreview() {
-	const w = parseInt(document.getElementById("cfg-w").value) || 1;
-	const h = parseInt(document.getElementById("cfg-h").value) || 1;
+	const rawW = parseInt(document.getElementById("cfg-w").value) || 1;
+	const rawH = parseInt(document.getElementById("cfg-h").value) || 1;
 	const station = document.getElementById("cfg-station").value.trim();
 	const approach = document.getElementById("cfg-approach").value || "below";
+
+	// For images, w/h are pixels; for tiles, w/h are tile counts
+	const isImage = !!selectedImageFile;
+	const w = isImage ? Math.ceil(rawW / TILE_SIZE) : rawW;
+	const h = isImage ? Math.ceil(rawH / TILE_SIZE) : rawH;
 
 	const gridW = w + 2;
 	const gridH = h + 3;
@@ -367,7 +452,26 @@ function renderApproachPreview() {
 
 	// Draw asset
 	let hasAsset = false;
-	if (selectedAnimFile) {
+	if (selectedImageFile) {
+		const img = loadImageAsset(selectedImageFile);
+		if (!img.complete) {
+			img.onload = renderApproachPreview;
+		} else if (img.naturalWidth) {
+			const frameStyle = document.getElementById("cfg-frame").value;
+			const pw = rawW * scale;
+			const ph = rawH * scale;
+			// Center within tile-aligned area
+			const bw = w * TILE_SIZE * scale;
+			const bh = h * TILE_SIZE * scale;
+			const px = assetX * TILE_SIZE * scale + (bw - pw) / 2;
+			const py = assetY * TILE_SIZE * scale + (bh - ph) / 2;
+			const p = frameStyle === "none" ? 0 : 3 * scale;
+			drawFrame(approachCtx, px, py, pw, ph, p, frameStyle);
+			approachCtx.drawImage(img, 0, 0, img.naturalWidth, img.naturalHeight,
+				px + p, py + p, pw - p * 2, ph - p * 2);
+			hasAsset = true;
+		}
+	} else if (selectedAnimFile) {
 		const img = loadAnimatedImage(selectedAnimFile);
 		if (!img.complete) {
 			img.onload = renderApproachPreview;
@@ -488,17 +592,18 @@ function renderApproachPreview() {
 	const info = document.getElementById("approach-info");
 	const facingLabel = document.getElementById("cfg-facing").value;
 	const posCount = validPositions.length;
+	const sizeLabel = isImage ? `${rawW}\u00d7${rawH}px` : `${w}\u00d7${h}`;
 	if (station) {
-		info.textContent = `${w}\u00d7${h} | ${station} | ${posCount} position${posCount !== 1 ? 's' : ''} | facing ${facingLabel}`;
+		info.textContent = `${sizeLabel} | ${station} | ${posCount} position${posCount !== 1 ? 's' : ''} | facing ${facingLabel}`;
 	} else {
-		info.textContent = `${w}\u00d7${h} | Click "Agent 1/2/3" then click grid to place`;
+		info.textContent = `${sizeLabel} | Click "Agent 1/2/3" then click grid to place`;
 	}
 }
 
 function startAnimation() {
 	animTimer = setInterval(() => {
 		animFrame = (animFrame + 1) % CHAR_FRAMES;
-		if ((selection || selectedAnimFile) && Object.keys(characterSprites).length > 0) renderApproachPreview();
+		if ((selection || selectedAnimFile || selectedImageFile) && Object.keys(characterSprites).length > 0) renderApproachPreview();
 	}, 125);
 }
 
@@ -543,6 +648,12 @@ function updateFieldVisibility() {
 	if (!isSpecial) {
 		document.getElementById("cfg-interval-label").style.display = "none";
 	}
+
+	// Frame selector and px labels only for images
+	const isImage = !!selectedImageFile;
+	document.getElementById("cfg-frame-label").style.display = isImage ? "" : "none";
+	document.getElementById("cfg-w-label").textContent = isImage ? "Width (px)" : "Width (tiles)";
+	document.getElementById("cfg-h-label").textContent = isImage ? "Height (px)" : "Height (tiles)";
 }
 
 // --- Station suggestions ---
@@ -604,6 +715,14 @@ function buildCatalogItems() {
 				const scale = Math.min(32 / fw, 32 / img.naturalHeight);
 				c.drawImage(img, 0, 0, fw, img.naturalHeight, 0, 0, fw * scale, img.naturalHeight * scale);
 			};
+		} else if (tile.image) {
+			const img = new Image();
+			img.src = `/assets/images/${tile.image}`;
+			img.onload = () => {
+				const scale = Math.min(32 / img.naturalWidth, 32 / img.naturalHeight);
+				const dw = img.naturalWidth * scale, dh = img.naturalHeight * scale;
+				c.drawImage(img, 0, 0, img.naturalWidth, img.naturalHeight, (32 - dw) / 2, (32 - dh) / 2, dw, dh);
+			};
 		} else if (tile.cutout) {
 			const img = new Image();
 			img.src = `/assets/cutouts/${tile.cutout}`;
@@ -660,11 +779,18 @@ function buildCatalogItems() {
 		item.appendChild(del);
 
 		item.onclick = () => {
-			if (tile.file) {
+			if (tile.image) {
+				selectedImageFile = tile.image;
+				selectedAnimFile = null;
+				selection = null;
+				buildImageList();
+			} else if (tile.file) {
 				selectedAnimFile = tile.file;
+				selectedImageFile = null;
 				selection = null;
 			} else {
 				selectedAnimFile = null;
+				selectedImageFile = null;
 				selectedTileset = tile.src;
 				tilesetSelect.value = tile.src;
 				gridOffsetX = tile.ox || 0;
@@ -687,9 +813,10 @@ function buildCatalogItems() {
 			document.getElementById("cfg-approach").value = tile.approach || "below";
 			document.getElementById("cfg-pose").value = tile.pose || "idle";
 			document.getElementById("cfg-facing").value = tile.facing || "auto";
+			document.getElementById("cfg-frame").value = tile.frame || (tile.padding === 0 ? "none" : "gold");
 			document.getElementById("cfg-collision").value = tile.collision || "";
-			document.getElementById("cfg-w").value = tile.w || 1;
-			document.getElementById("cfg-h").value = tile.h || 1;
+			document.getElementById("cfg-w").value = tile.pw || tile.w || 1;
+			document.getElementById("cfg-h").value = tile.ph || tile.h || 1;
 			document.getElementById("cfg-category").value = cat.name;
 			// Restore approach positions
 			if (tile.approaches && tile.approaches.length > 0) {
@@ -798,14 +925,18 @@ document.getElementById("btn-add").onclick = () => {
 	const h = parseInt(document.getElementById("cfg-h").value) || 1;
 
 	let tile;
-	if (selectedAnimFile) {
+	if (selectedImageFile) {
+		const frameStyle = document.getElementById("cfg-frame").value;
+		tile = { image: selectedImageFile, pw: w, ph: h, label, padding: frameStyle === "none" ? 0 : 3 };
+		if (frameStyle && frameStyle !== "gold") tile.frame = frameStyle;
+	} else if (selectedAnimFile) {
 		tile = { file: selectedAnimFile, w, h, label };
 	} else if (selection) {
 		tile = { src: selectedTileset, tx: selection.tx, ty: selection.ty, w, h, label };
 		if (gridOffsetX) tile.ox = gridOffsetX;
 		if (gridOffsetY) tile.oy = gridOffsetY;
 	} else {
-		statusEl.textContent = "Select a tileset region or animated sprite first";
+		statusEl.textContent = "Select a tileset region, animated sprite, or image first";
 		return;
 	}
 
@@ -908,10 +1039,15 @@ async function init() {
 	if (keys.length > 0) selectedTileset = keys[0];
 	catalog = await loadTileCatalog();
 	animatedFiles = await loadAnimatedFiles();
+	try {
+		const res = await fetch("/api/images");
+		if (res.ok) imageFiles = await res.json();
+	} catch { /* empty */ }
 
 	populateTilesetDropdown();
 	renderTileset();
 	buildAnimatedList();
+	buildImageList();
 	buildCatalogTabs();
 	buildCatalogItems();
 	buildConfigCategoryTabs();

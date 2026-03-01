@@ -39,6 +39,11 @@
 			</div>
 			<div class="panel-header">Animated Sprites</div>
 			<div class="panel-body animated-list" id="animated-list" style="max-height:200px"></div>
+			<div class="panel-header" style="display:flex;align-items:center;justify-content:space-between">
+				Images
+				<button id="btn-upload-image" style="font-size:10px;padding:2px 8px">Upload</button>
+			</div>
+			<div class="panel-body animated-list" id="image-list" style="max-height:200px"></div>
 		</div>
 
 		<!-- Center: preview + config -->
@@ -102,8 +107,18 @@
 							<option value="solid">solid</option>
 						</select>
 					</label>
-					<label>Width (tiles) <input type="text" id="cfg-w" value="1"></label>
-					<label>Height (tiles) <input type="text" id="cfg-h" value="1"></label>
+					<label><span id="cfg-w-label">Width (tiles)</span> <input type="text" id="cfg-w" value="1"></label>
+					<label><span id="cfg-h-label">Height (tiles)</span> <input type="text" id="cfg-h" value="1"></label>
+					<label id="cfg-frame-label" style="display:none">Frame
+						<select id="cfg-frame">
+							<option value="gold" selected>Gold</option>
+							<option value="wood">Wood</option>
+							<option value="dark">Dark</option>
+							<option value="white">White</option>
+							<option value="black">Black</option>
+							<option value="none">None</option>
+						</select>
+					</label>
 					<button id="btn-add" style="margin-top:8px">Add to Catalog</button>
 				</div>
 			</div>

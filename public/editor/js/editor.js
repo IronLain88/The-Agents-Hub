@@ -1,6 +1,6 @@
 import {
 	TILE_SIZE, GRID_W, GRID_H, STATION_COLORS,
-	loadTilesets, getTilesetImage, loadAnimatedImage, getAnimatedImage, loadCutoutImage,
+	loadTilesets, getTilesetImage, loadAnimatedImage, getAnimatedImage, loadCutoutImage, loadImageAsset,
 	drawGrid, drawTileLayer, drawAsset, drawStationOverlay,
 	loadProperty, saveProperty, loadTileCatalog, loadAnimatedFiles,
 	screenToGrid, inBounds, fetchStates,
@@ -8,10 +8,18 @@ import {
 } from "./editor-shared.js";
 import { getApproachDirectionFor } from "../../viewer/station-logic.js";
 
+// --- Helpers ---
+function assetTileSize(sprite) {
+	const w = sprite?.pw ? Math.ceil(sprite.pw / TILE_SIZE) : (sprite?.width || 1);
+	const h = sprite?.ph ? Math.ceil(sprite.ph / TILE_SIZE) : (sprite?.height || 1);
+	return { w, h };
+}
+
 // --- State ---
 let tool = "paint";    // paint | erase | select
 let catalog = { categories: [] };
 let animatedFiles = [];
+let imageFiles = [];
 let selectedPalette = null; // { src, tx, ty, w, h, label, station, approach, collision, file }
 let selectedAssetIndex = -1;
 let placingApproach = false;
@@ -155,10 +163,11 @@ function applyProperty(data) {
 	property.collision = data.collision || [];
 	property.width = data.width || GRID_W;
 	property.height = data.height || GRID_H;
-	// preload animated and cutout images
+	// preload animated, cutout, and image assets
 	for (const asset of property.assets) {
 		if (asset.sprite?.file) loadAnimatedImage(asset.sprite.file);
 		if (asset.sprite?.cutout) loadCutoutImage(asset.sprite.cutout);
+		if (asset.sprite?.image) loadImageAsset(asset.sprite.image);
 	}
 	selectedAssetIndex = -1;
 	hideSelectInfo();
@@ -169,9 +178,10 @@ let activeCategory = 0;
 
 function buildPalette() {
 	paletteTabs.innerHTML = "";
-	// Add "Animated" as a virtual category at the end
+	// Add virtual categories at the end
 	const allCats = [...catalog.categories];
 	if (animatedFiles.length > 0) allCats.push({ name: "Animated (All)", tiles: null });
+	allCats.push({ name: "Images", tiles: null, _type: "images" });
 
 	allCats.forEach((cat, i) => {
 		const btn = document.createElement("button");
@@ -184,6 +194,53 @@ function buildPalette() {
 	paletteGrid.innerHTML = "";
 	const cat = allCats[activeCategory];
 	if (!cat) return;
+
+	if (cat._type === "images") {
+		// Upload button
+		const uploadBtn = document.createElement("div");
+		uploadBtn.className = "palette-item";
+		uploadBtn.title = "Upload image";
+		uploadBtn.style.cursor = "pointer";
+		const uploadLabel = document.createElement("div");
+		uploadLabel.className = "label";
+		uploadLabel.textContent = "+ Upload";
+		uploadBtn.appendChild(uploadLabel);
+		uploadBtn.onclick = () => {
+			const input = document.createElement("input");
+			input.type = "file";
+			input.accept = "image/*";
+			input.onchange = async () => {
+				const file = input.files[0];
+				if (!file) return;
+				const fname = file.name.replace(/[^a-zA-Z0-9_.-]/g, '_');
+				try {
+					const buf = await file.arrayBuffer();
+					const res = await fetch(`/api/images/${fname}`, {
+						method: "POST",
+						headers: { ...authHeaders(), "Content-Type": "application/octet-stream" },
+						body: buf,
+					});
+					if (res.ok) {
+						if (!imageFiles.includes(fname)) imageFiles.push(fname);
+						buildPalette();
+						statusEl.textContent = `Uploaded ${fname}`;
+					} else {
+						statusEl.textContent = `Upload failed: ${res.status}`;
+					}
+				} catch (err) {
+					statusEl.textContent = `Upload failed: ${err.message}`;
+				}
+			};
+			input.click();
+		};
+		paletteGrid.appendChild(uploadBtn);
+		// Image thumbnails
+		for (const file of imageFiles) {
+			const item = createImagePaletteItem(file);
+			paletteGrid.appendChild(item);
+		}
+		return;
+	}
 
 	if (cat.tiles === null) {
 		// Virtual "all animated" category
@@ -198,6 +255,7 @@ function buildPalette() {
 		let item;
 		if (tile.file) item = createAnimatedPaletteItem(tile.file, tile, cat.name);
 		else if (tile.cutout) item = createCutoutPaletteItem(tile, cat.name);
+		else if (tile.image) item = createImagePaletteItem(tile.image, tile);
 		else item = createTilesetPaletteItem(tile, cat.name);
 		paletteGrid.appendChild(item);
 	}
@@ -335,6 +393,56 @@ function createAnimatedPaletteItem(file, catalogTile, category) {
 			approaches: meta.approaches,
 			layer: meta.layer,
 			_category: category,
+		};
+		document.querySelectorAll(".palette-item").forEach(el => el.classList.remove("selected"));
+		item.classList.add("selected");
+		setTool("paint");
+	};
+	return item;
+}
+
+function createImagePaletteItem(file, catalogTile) {
+	const meta = catalogTile || {};
+	const item = document.createElement("div");
+	item.className = "palette-item";
+	item.title = meta.label || file;
+
+	const cvs = document.createElement("canvas");
+	cvs.width = 48; cvs.height = 48;
+	const c = cvs.getContext("2d");
+	c.imageSmoothingEnabled = false;
+	// Placeholder frame
+	c.fillStyle = '#5a3a1a';
+	c.fillRect(4, 4, 40, 40);
+	c.fillStyle = '#8b6914';
+	c.fillRect(6, 6, 36, 36);
+	c.fillStyle = '#444';
+	c.fillRect(10, 10, 28, 28);
+	const img = loadImageAsset(file);
+	const draw = () => {
+		if (!img.complete || !img.naturalWidth) return;
+		c.clearRect(0, 0, 48, 48);
+		const scale = Math.min(48 / img.naturalWidth, 48 / img.naturalHeight);
+		const dw = img.naturalWidth * scale, dh = img.naturalHeight * scale;
+		c.drawImage(img, 0, 0, img.naturalWidth, img.naturalHeight, (48 - dw) / 2, (48 - dh) / 2, dw, dh);
+	};
+	if (img.complete && img.naturalWidth) draw(); else img.onload = draw;
+	item.appendChild(cvs);
+
+	const lbl = document.createElement("div");
+	lbl.className = "label";
+	lbl.textContent = meta.label || file.replace(/\.[^.]+$/, '');
+	item.appendChild(lbl);
+
+	item.onclick = () => {
+		selectedPalette = {
+			image: file,
+			pw: meta.pw || 32,
+			ph: meta.ph || 32,
+			label: meta.label || file,
+			padding: meta.padding ?? 3,
+			frame: meta.frame,
+			_category: "Images",
 		};
 		document.querySelectorAll(".palette-item").forEach(el => el.classList.remove("selected"));
 		item.classList.add("selected");
@@ -633,8 +741,12 @@ function paintAt(gx, gy) {
 		if (selectedPalette.file) {
 			asset.sprite = { file: selectedPalette.file, width: selectedPalette.w || 1 };
 			loadAnimatedImage(selectedPalette.file);
+		} else if (selectedPalette.image) {
+			asset.sprite = { image: selectedPalette.image, pw: selectedPalette.pw || 32, ph: selectedPalette.ph || 32, padding: selectedPalette.padding ?? 3 };
+			if (selectedPalette.frame) asset.sprite.frame = selectedPalette.frame;
+			loadImageAsset(selectedPalette.image);
 		} else if (selectedPalette.cutout) {
-			asset.sprite = { cutout: selectedPalette.cutout, width: selectedPalette.w || 1, height: selectedPalette.h || 1 };
+			asset.sprite = { cutout: selectedPalette.cutout, width: selectedPalette.w || 1, height: selectedPalette.h || 1, padding: selectedPalette.padding || 0 };
 			loadCutoutImage(selectedPalette.cutout);
 		} else {
 			asset.sprite = {
@@ -677,8 +789,7 @@ function eraseAt(gx, gy) {
 	for (let i = property.assets.length - 1; i >= 0; i--) {
 		const a = property.assets[i];
 		if (!a.position) continue;
-		const w = a.sprite?.width || 1;
-		const h = a.sprite?.height || 1;
+		const { w, h } = assetTileSize(a.sprite);
 		if (gx >= a.position.x && gx < a.position.x + w &&
 			gy >= a.position.y && gy < a.position.y + h) {
 			property.assets.splice(i, 1);
@@ -695,8 +806,7 @@ function selectAt(gx, gy) {
 		const asset = property.assets[selectedAssetIndex];
 		const ox = gx - asset.position.x;
 		const oy = gy - asset.position.y;
-		const w = asset.sprite?.width || 1;
-		const h = asset.sprite?.height || 1;
+		const { w, h } = assetTileSize(asset.sprite);
 
 		if (!asset.approaches) asset.approaches = [];
 
@@ -721,8 +831,7 @@ function selectAt(gx, gy) {
 	for (let i = property.assets.length - 1; i >= 0; i--) {
 		const a = property.assets[i];
 		if (!a.position) continue;
-		const w = a.sprite?.width || 1;
-		const h = a.sprite?.height || 1;
+		const { w, h } = assetTileSize(a.sprite);
 		if (gx >= a.position.x && gx < a.position.x + w &&
 			gy >= a.position.y && gy < a.position.y + h) {
 			selectedAssetIndex = i;
@@ -784,8 +893,7 @@ function render() {
 		ctx.fillStyle = "rgba(255, 0, 0, 0.3)";
 		for (const asset of property.assets) {
 			if (!asset.collision || !asset.position) continue;
-			const w = asset.sprite?.width || 1;
-			const h = asset.sprite?.height || 1;
+			const { w, h } = assetTileSize(asset.sprite);
 			for (let dy = 0; dy < h; dy++) {
 				for (let dx = 0; dx < w; dx++) {
 					const px = (asset.position.x + dx) * TILE_SIZE;
@@ -817,8 +925,8 @@ function render() {
 		const a = property.assets[selectedAssetIndex];
 		const px = a.position.x * TILE_SIZE;
 		const py = a.position.y * TILE_SIZE;
-		const sw = (a.sprite?.width || 1) * TILE_SIZE;
-		const sh = (a.sprite?.height || 1) * TILE_SIZE;
+		const sw = a.sprite?.pw || (a.sprite?.width || 1) * TILE_SIZE;
+		const sh = a.sprite?.ph || (a.sprite?.height || 1) * TILE_SIZE;
 		ctx.strokeStyle = "#fff";
 		ctx.lineWidth = 2 / camera.zoom;
 		ctx.setLineDash([4 / camera.zoom, 4 / camera.zoom]);
@@ -841,6 +949,10 @@ async function init() {
 	await Promise.all([loadTilesets(), fetchStates()]);
 	catalog = await loadTileCatalog();
 	animatedFiles = await loadAnimatedFiles();
+	try {
+		const res = await fetch("/api/images");
+		if (res.ok) imageFiles = await res.json();
+	} catch { /* empty */ }
 	buildPalette();
 
 	// Always load default property

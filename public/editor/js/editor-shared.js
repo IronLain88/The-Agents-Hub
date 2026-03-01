@@ -89,6 +89,39 @@ export function loadCutoutImage(file) {
 	return img;
 }
 
+// --- Image loading ---
+
+const imageAssets = new Map();
+
+export function loadImageAsset(file) {
+	if (imageAssets.has(file)) return imageAssets.get(file);
+	const img = new Image();
+	img.src = `/assets/images/${file}`;
+	imageAssets.set(file, img);
+	return img;
+}
+
+// --- Frame drawing helper ---
+
+export const FRAME_STYLES = {
+	gold:  ['#5a3a1a', '#8b6914', '#c8a84e'],
+	dark:  ['#1a1a1a', '#333333', '#555555'],
+	white: ['#888888', '#cccccc', '#f0f0f0'],
+	wood:  ['#3b2507', '#6b4226', '#a0703c'],
+	black: ['#000000', '#1a1a1a', '#333333'],
+};
+
+export function drawFrame(ctx, dx, dy, w, h, p, style) {
+	if (p <= 0) return;
+	const c = FRAME_STYLES[style] || FRAME_STYLES.gold;
+	ctx.fillStyle = c[0];
+	ctx.fillRect(dx, dy, w, h);
+	ctx.fillStyle = c[1];
+	ctx.fillRect(dx + 1, dy + 1, w - 2, h - 2);
+	ctx.fillStyle = c[2];
+	ctx.fillRect(dx + p - 1, dy + p - 1, w - (p - 1) * 2, h - (p - 1) * 2);
+}
+
 // --- Grid drawing ---
 
 export function drawGrid(ctx, zoom) {
@@ -136,13 +169,19 @@ export function drawAsset(ctx, asset) {
 		ctx.drawImage(img, 0, 0, fw, img.naturalHeight,
 			asset.position.x * TILE_SIZE, asset.position.y * TILE_SIZE, fw, img.naturalHeight
 		);
-	} else if (sprite?.cutout) {
-		const img = cutoutImages.get(sprite.cutout);
+	} else if (sprite?.cutout || sprite?.image) {
+		const img = sprite.cutout ? cutoutImages.get(sprite.cutout) : imageAssets.get(sprite.image);
 		if (!img?.complete || !img.naturalWidth) return;
-		const w = (sprite.width || 1) * TILE_SIZE;
-		const h = (sprite.height || 1) * TILE_SIZE;
+		const w = sprite.pw || (sprite.width || 1) * TILE_SIZE;
+		const h = sprite.ph || (sprite.height || 1) * TILE_SIZE;
+		const p = sprite.padding || 0;
+		const bw = Math.ceil(w / TILE_SIZE) * TILE_SIZE;
+		const bh = Math.ceil(h / TILE_SIZE) * TILE_SIZE;
+		const dx = asset.position.x * TILE_SIZE + (bw - w) / 2;
+		const dy = asset.position.y * TILE_SIZE + (bh - h) / 2;
+		drawFrame(ctx, dx, dy, w, h, p, sprite.frame);
 		ctx.drawImage(img, 0, 0, img.naturalWidth, img.naturalHeight,
-			asset.position.x * TILE_SIZE, asset.position.y * TILE_SIZE, w, h
+			dx + p, dy + p, w - p * 2, h - p * 2
 		);
 	} else if (sprite?.tileset) {
 		const img = tilesetImages[sprite.tileset];
@@ -165,8 +204,9 @@ export function drawAsset(ctx, asset) {
 export function drawStationOverlay(ctx, asset, zoom) {
 	if (!asset.station || !asset.position) return;
 	const color = STATION_COLORS[asset.station] || "#fff";
-	const w = (asset.sprite?.width || 1) * TILE_SIZE;
-	const h = (asset.sprite?.height || 1) * TILE_SIZE;
+	const s = asset.sprite;
+	const w = s?.pw || (s?.width || 1) * TILE_SIZE;
+	const h = s?.ph || (s?.height || 1) * TILE_SIZE;
 	const px = asset.position.x * TILE_SIZE;
 	const py = asset.position.y * TILE_SIZE;
 	ctx.strokeStyle = color;

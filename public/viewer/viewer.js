@@ -53,12 +53,32 @@ const BUBBLE_MAX_WIDTH = 320;
 const BUBBLE_LINE_HEIGHT = 12;
 const WAYPOINT_THRESHOLD = 2; // Pixels - how close before advancing to next waypoint
 
+// --- Drawing helpers ---
+const FRAME_STYLES = {
+  gold:  ['#5a3a1a', '#8b6914', '#c8a84e'],
+  dark:  ['#1a1a1a', '#333333', '#555555'],
+  white: ['#888888', '#cccccc', '#f0f0f0'],
+  wood:  ['#3b2507', '#6b4226', '#a0703c'],
+  black: ['#000000', '#1a1a1a', '#333333'],
+};
+function drawFrame(ctx, dx, dy, w, h, p, style) {
+  if (p <= 0) return;
+  const c = FRAME_STYLES[style] || FRAME_STYLES.gold;
+  ctx.fillStyle = c[0];
+  ctx.fillRect(dx, dy, w, h);
+  ctx.fillStyle = c[1];
+  ctx.fillRect(dx + 1, dy + 1, w - 2, h - 2);
+  ctx.fillStyle = c[2];
+  ctx.fillRect(dx + p - 1, dy + p - 1, w - (p - 1) * 2, h - (p - 1) * 2);
+}
+
 // --- State ---
 const agents = new Map();
 const characters = new Map();
 const tilesetImages = {};
 const animatedImages = new Map();
 const cutoutImages = new Map();
+const imageAssets = new Map();
 const characterSprites = {}; // { charName: { pose: Image } }
 let animTime = 0;
 const signalFlash = new Map(); // station -> Date.now() of last fire
@@ -133,6 +153,11 @@ function applyPropertyData(propData) {
       const img = new Image();
       img.src = `${HUB_HTTP_URL}/assets/cutouts/${asset.sprite.cutout}`;
       cutoutImages.set(asset.sprite.cutout, img);
+    }
+    if (asset.sprite?.image && !imageAssets.has(asset.sprite.image)) {
+      const img = new Image();
+      img.src = `${HUB_HTTP_URL}/assets/images/${asset.sprite.image}`;
+      imageAssets.set(asset.sprite.image, img);
     }
   }
   for (const a of animatedList) {
@@ -417,19 +442,26 @@ function drawPropertyTiles() {
 
   drawTileLayer(property.objects, 0, 0);
 
-  // Static tileset and cutout assets — walls first, then furniture
+  // Static tileset, cutout, and image assets — walls first, then furniture
   for (const isWallPass of [true, false]) {
   for (const asset of property.assets || []) {
     if ((asset.layer === 'wall') !== isWallPass) continue;
     if (!asset.position || asset.sprite?.file) continue;
     const sprite = asset.sprite;
-    if (sprite?.cutout) {
-      const img = cutoutImages.get(sprite.cutout);
+    if (sprite?.cutout || sprite?.image) {
+      const img = sprite.cutout ? cutoutImages.get(sprite.cutout) : imageAssets.get(sprite.image);
       if (img?.complete && img.naturalWidth) {
-        const w = (sprite.width || 1) * TILE_SIZE;
-        const h = (sprite.height || 1) * TILE_SIZE;
+        const w = sprite.pw || (sprite.width || 1) * TILE_SIZE;
+        const h = sprite.ph || (sprite.height || 1) * TILE_SIZE;
+        const p = sprite.padding || 0;
+        // Center pixel-sized assets within their tile bounding box
+        const bw = Math.ceil(w / TILE_SIZE) * TILE_SIZE;
+        const bh = Math.ceil(h / TILE_SIZE) * TILE_SIZE;
+        const dx = asset.position.x * TILE_SIZE + (bw - w) / 2;
+        const dy = asset.position.y * TILE_SIZE + (bh - h) / 2;
+        drawFrame(ctx, dx, dy, w, h, p, sprite.frame);
         ctx.drawImage(img, 0, 0, img.naturalWidth, img.naturalHeight,
-          asset.position.x * TILE_SIZE, asset.position.y * TILE_SIZE, w, h);
+          dx + p, dy + p, w - p * 2, h - p * 2);
       }
       drawAssetIndicators(asset, 0, 0);
       continue;
@@ -923,8 +955,19 @@ function findAssetAt(worldX, worldY) {
     if (!asset.position) continue;
     const ax = asset.position.x;
     const ay = asset.position.y;
-    const w = asset.sprite?.width || 1;
-    const h = asset.sprite?.height || 1;
+    const sprite = asset.sprite;
+    if (sprite?.pw || sprite?.ph) {
+      const px = ax * TILE_SIZE;
+      const py = ay * TILE_SIZE;
+      if (worldX >= px && worldX < px + (sprite.pw || TILE_SIZE) &&
+          worldY >= py && worldY < py + (sprite.ph || TILE_SIZE)) {
+        if (asset.layer === 'wall') { wallHit = wallHit || asset; continue; }
+        return asset;
+      }
+      continue;
+    }
+    const w = sprite?.width || 1;
+    const h = sprite?.height || 1;
     if (tileX >= ax && tileX < ax + w && tileY >= ay && tileY < ay + h) {
       if (asset.layer === 'wall') { wallHit = wallHit || asset; continue; }
       return asset;
@@ -955,9 +998,24 @@ async function handleCanvasClick(e) {
     await showRemoteBoard(asset);
   } else if (asset.station) {
     showStationInfo(asset);
+  } else if (asset.sprite?.image) {
+    showImageLightbox(asset);
   } else if (!asset.layer) {
     showModal(asset.name || 'Furniture', 'A piece of furniture on the property.');
   }
+}
+
+function showImageLightbox(asset) {
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);z-index:2000;display:flex;align-items:center;justify-content:center;cursor:pointer;';
+  const img = document.createElement('img');
+  img.src = `${HUB_HTTP_URL}/assets/images/${asset.sprite.image}`;
+  img.style.cssText = 'max-width:90vw;max-height:90vh;object-fit:contain;border-radius:4px;box-shadow:0 0 40px rgba(0,0,0,0.5);';
+  overlay.appendChild(img);
+  document.body.appendChild(overlay);
+  const close = () => overlay.remove();
+  overlay.addEventListener('click', close);
+  document.addEventListener('keydown', e => e.key === 'Escape' && close(), { once: true });
 }
 
 function showInboxMessages(asset) {

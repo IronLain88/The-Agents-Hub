@@ -123,7 +123,7 @@ if (IS_PRODUCTION) {
 }
 
 app.use(express.json({ limit: "5mb" }));
-app.use(express.raw({ type: "image/*", limit: "2mb" }));
+app.use(express.raw({ type: ["image/*", "application/octet-stream"], limit: "2mb" }));
 
 // Rate limiters
 const signalLimiter = rateLimit({
@@ -197,6 +197,32 @@ scanCharacters();
 
 app.get("/api/characters", (_req, res) => res.json(availableCharacters));
 app.use("/assets/animated", express.static(join(__dirname, "public", "assets", "animated")));
+
+// Image storage — full images displayed with picture frames + lightbox
+const IMAGES_DIR = join(__dirname, "public", "assets", "images");
+app.use("/assets/images", express.static(IMAGES_DIR));
+app.get("/api/images", async (_req, res) => {
+  try {
+    await mkdir(IMAGES_DIR, { recursive: true });
+    const files = (await readdir(IMAGES_DIR)).filter(f => /\.(png|jpe?g|gif|webp)$/i.test(f));
+    res.json(files);
+  } catch (err) {
+    res.status(500).json({ error: IS_PRODUCTION ? "Internal server error" : err.message });
+  }
+});
+app.post("/api/images/:filename", requireAuth, propertyLimiter, async (req, res) => {
+  try {
+    const fname = req.params.filename;
+    if (!/^[a-zA-Z0-9_-]+\.(png|jpe?g|gif|webp)$/i.test(fname)) {
+      return res.status(400).json({ error: "Invalid filename" });
+    }
+    await mkdir(IMAGES_DIR, { recursive: true });
+    await writeFile(join(IMAGES_DIR, fname), req.body);
+    res.json({ ok: true, path: `/assets/images/${fname}` });
+  } catch (err) {
+    res.status(500).json({ error: IS_PRODUCTION ? "Internal server error" : err.message });
+  }
+});
 
 // Cutout storage — persistent PNGs extracted from tilesets
 const CUTOUTS_DIR = join(__dirname, "public", "assets", "cutouts");

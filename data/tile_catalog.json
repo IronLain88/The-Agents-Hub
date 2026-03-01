@@ -239,6 +239,13 @@
 					"label": "Inbox",
 					"station": "inbox",
 					"approach": "below"
+				},
+				{
+					"image": "the_agents_poster.png",
+					"pw": 32,
+					"ph": 32,
+					"label": "The_Agents_Poster",
+					"padding": 3
 				}
 			]
 		},
