@@ -1026,8 +1026,8 @@ function findInbox(name) {
   return currentProperty.assets.find(a => a.station === station && a.station.startsWith("inbox"));
 }
 
-// POST /api/inbox/:name? — append a message to a named inbox
-app.post("/api/inbox/:name?", requireAuth, stateLimiter, (req, res) => {
+// POST /api/inbox or /api/inbox/:name — append a message to a named inbox
+function handleInboxPost(req, res) {
   const validation = schemas.inboxMessageSchema.safeParse(req.body);
   if (!validation.success) {
     return res.status(400).json({ error: validation.error.issues[0].message });
@@ -1055,10 +1055,12 @@ app.post("/api/inbox/:name?", requireAuth, stateLimiter, (req, res) => {
   savePropertyToDisk().catch(e => console.error("[hub] Failed to save property:", e));
   console.log(`[hub] Inbox "${asset.station}" message from "${from}" (${messages.length} total)`);
   res.json({ ok: true, count: messages.length });
-});
+}
+app.post("/api/inbox", requireAuth, stateLimiter, handleInboxPost);
+app.post("/api/inbox/:name", requireAuth, stateLimiter, handleInboxPost);
 
-// DELETE /api/inbox/:name? — clear a named inbox
-app.delete("/api/inbox/:name?", requireAuth, stateLimiter, (req, res) => {
+// DELETE /api/inbox or /api/inbox/:name — clear a named inbox
+function handleInboxDelete(req, res) {
   const asset = findInbox(req.params.name);
   if (!asset) {
     const target = req.params.name || "inbox";
@@ -1070,7 +1072,9 @@ app.delete("/api/inbox/:name?", requireAuth, stateLimiter, (req, res) => {
   savePropertyToDisk().catch(e => console.error("[hub] Failed to save property:", e));
   console.log(`[hub] Inbox "${asset.station}" cleared`);
   res.json({ ok: true });
-});
+}
+app.delete("/api/inbox", requireAuth, stateLimiter, handleInboxDelete);
+app.delete("/api/inbox/:name", requireAuth, stateLimiter, handleInboxDelete);
 
 // --- Remote board proxy (feature-flagged) ---
 function requireRemoteBoard(_req, res, next) {
