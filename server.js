@@ -644,7 +644,7 @@ function buildWelcome() {
     if (!a.station) continue;
     if (a.trigger) {
       signals.push(`${a.name || a.station} (${a.trigger})`);
-    } else if (a.station === "inbox" && a.content?.data) {
+    } else if (a.station.startsWith("inbox") && a.content?.data) {
       try {
         const msgs = JSON.parse(a.content.data);
         if (Array.isArray(msgs)) inboxCount += msgs.length;
@@ -796,7 +796,7 @@ app.get("/api/status", (_req, res) => {
   let inboxCount = 0;
   let inboxLatest = null;
   for (const asset of currentProperty.assets || []) {
-    if (asset.station === "inbox" && asset.content?.data) {
+    if (asset.station?.startsWith("inbox") && asset.content?.data) {
       try {
         const msgs = JSON.parse(asset.content.data);
         if (Array.isArray(msgs)) inboxCount += msgs.length;
@@ -1019,18 +1019,23 @@ app.post("/api/board/:station", requireBoard, requireAuth, stateLimiter, (req, r
 
 // --- Inbox endpoints ---
 
-// POST /api/inbox — append a message to the inbox
-app.post("/api/inbox", requireAuth, stateLimiter, (req, res) => {
+// Find inbox asset by name (defaults to "inbox")
+function findInbox(name) {
+  const station = name || "inbox";
+  if (!currentProperty?.assets) return null;
+  return currentProperty.assets.find(a => a.station === station && a.station.startsWith("inbox"));
+}
+
+// POST /api/inbox/:name? — append a message to a named inbox
+app.post("/api/inbox/:name?", requireAuth, stateLimiter, (req, res) => {
   const validation = schemas.inboxMessageSchema.safeParse(req.body);
   if (!validation.success) {
     return res.status(400).json({ error: validation.error.issues[0].message });
   }
-  if (!currentProperty?.assets) {
-    return res.status(404).json({ error: "No property loaded" });
-  }
-  const asset = currentProperty.assets.find(a => a.station === "inbox");
+  const asset = findInbox(req.params.name);
   if (!asset) {
-    return res.status(404).json({ error: 'No inbox found — add an asset with station="inbox" to your property' });
+    const target = req.params.name || "inbox";
+    return res.status(404).json({ error: `No inbox "${target}" found — add an asset with station="${target}" to your property` });
   }
 
   let messages = [];
@@ -1048,24 +1053,22 @@ app.post("/api/inbox", requireAuth, stateLimiter, (req, res) => {
   asset.content = { type: "json", data: JSON.stringify(messages), publishedAt: new Date().toISOString() };
   broadcast({ type: "property_update", property: currentProperty });
   savePropertyToDisk().catch(e => console.error("[hub] Failed to save property:", e));
-  console.log(`[hub] Inbox message from "${from}" (${messages.length} total)`);
+  console.log(`[hub] Inbox "${asset.station}" message from "${from}" (${messages.length} total)`);
   res.json({ ok: true, count: messages.length });
 });
 
-// DELETE /api/inbox — clear all inbox messages
-app.delete("/api/inbox", requireAuth, stateLimiter, (req, res) => {
-  if (!currentProperty?.assets) {
-    return res.status(404).json({ error: "No property loaded" });
-  }
-  const asset = currentProperty.assets.find(a => a.station === "inbox");
+// DELETE /api/inbox/:name? — clear a named inbox
+app.delete("/api/inbox/:name?", requireAuth, stateLimiter, (req, res) => {
+  const asset = findInbox(req.params.name);
   if (!asset) {
-    return res.status(404).json({ error: 'No inbox found — add an asset with station="inbox" to your property' });
+    const target = req.params.name || "inbox";
+    return res.status(404).json({ error: `No inbox "${target}" found — add an asset with station="${target}" to your property` });
   }
 
   asset.content = { type: "json", data: "[]", publishedAt: new Date().toISOString() };
   broadcast({ type: "property_update", property: currentProperty });
   savePropertyToDisk().catch(e => console.error("[hub] Failed to save property:", e));
-  console.log("[hub] Inbox cleared");
+  console.log(`[hub] Inbox "${asset.station}" cleared`);
   res.json({ ok: true });
 });
 
