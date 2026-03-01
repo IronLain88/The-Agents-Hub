@@ -65,6 +65,36 @@
 					"w": 3,
 					"h": 2,
 					"label": "Glass_Wall"
+				},
+				{
+					"src": "concrete_3",
+					"tx": 0,
+					"ty": 1,
+					"w": 1,
+					"h": 1,
+					"label": "Concrete_Block",
+					"layer": "wall",
+					"collision": "solid"
+				},
+				{
+					"src": "concrete_3",
+					"tx": 0,
+					"ty": 3,
+					"w": 1,
+					"h": 1,
+					"label": "Concrete_Bottom",
+					"layer": "wall",
+					"collision": "solid"
+				},
+				{
+					"src": "concrete_3",
+					"tx": 3,
+					"ty": 0,
+					"w": 1,
+					"h": 1,
+					"label": "Concrete_top",
+					"layer": "wall",
+					"collision": "solid"
 				}
 			]
 		},
@@ -118,6 +148,22 @@
 					"w": 1,
 					"h": 1,
 					"label": "floor_pallets"
+				},
+				{
+					"src": "delivery",
+					"tx": 1,
+					"ty": 9,
+					"w": 2,
+					"h": 2,
+					"label": "floor_wood"
+				},
+				{
+					"src": "delivery",
+					"tx": 5,
+					"ty": 9,
+					"w": 2,
+					"h": 2,
+					"label": "floor_concrete2"
 				}
 			]
 		},
@@ -241,11 +287,41 @@
 					"approach": "below"
 				},
 				{
-					"image": "the_agents_poster.png",
-					"pw": 32,
-					"ph": 32,
-					"label": "The_Agents_Poster",
-					"padding": 3
+					"src": "delivery",
+					"tx": 9,
+					"ty": 9,
+					"w": 4,
+					"h": 2,
+					"label": "Generate_Board",
+					"station": "generating",
+					"approaches": [
+						{
+							"x": 0,
+							"y": 2,
+							"dir": "below"
+						},
+						{
+							"x": 1.5,
+							"y": 2,
+							"dir": "below"
+						},
+						{
+							"x": 3,
+							"y": 2,
+							"dir": "below"
+						}
+					]
+				},
+				{
+					"src": "delivery",
+					"tx": 12,
+					"ty": 1,
+					"w": 4,
+					"h": 3,
+					"label": "Query_Play",
+					"station": "querying",
+					"approach": "below",
+					"collision": "solid"
 				}
 			]
 		},
@@ -292,6 +368,45 @@
 					"collision": "solid",
 					"station": "News_Desk",
 					"approach": "below"
+				}
+			]
+		},
+		{
+			"name": "Decorations",
+			"tiles": [
+				{
+					"image": "Y2K_Display_.JPG",
+					"pw": 60,
+					"ph": 60,
+					"label": "Y2K_Display_",
+					"padding": 3,
+					"frame": "white",
+					"feet": true,
+					"collision": "solid"
+				},
+				{
+					"image": "the_agents_poster.png",
+					"pw": 30,
+					"ph": 30,
+					"label": "the_agents_carpet",
+					"padding": 0,
+					"frame": "none"
+				},
+				{
+					"image": "y2k_gurl.jpg",
+					"pw": 30,
+					"ph": 30,
+					"label": "y2k_gurl",
+					"padding": 3,
+					"frame": "dark"
+				},
+				{
+					"image": "y2k_coded_carpet.jpg",
+					"pw": 60,
+					"ph": 40,
+					"label": "y2k_coded_carpet",
+					"padding": 0,
+					"frame": "none"
 				}
 			]
 		}
