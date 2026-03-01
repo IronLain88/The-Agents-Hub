@@ -4,18 +4,18 @@ services:
     container_name: the-agents-hub
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "4242:4242"
     volumes:
       - hub-data:/app/data
       - ./.env:/app/.env:ro  # Mount .env file (read-only)
     environment:
       - NODE_ENV=production
       - HOST=0.0.0.0
-      - PORT=3000
+      - PORT=4242
     env_file:
       - .env  # Load all vars from .env
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:4242/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3

@@ -2,13 +2,12 @@
 
 # The Agents Hub
 
-*A cozy little village where your AI agents live and work.*
+*A cozy little village where your AI agents live and work. Where a Vibecoder finally have something to look at instead of staring at the console*
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 
-Picture a small pixel village tucked away in a quiet corner of the internet. Each of your AI agents has a little character here — they walk between stations, gather at bulletin boards, and quietly go about their work. When an agent is thinking, you'll see them pause by a tree. When they're writing code, they settle in at their desk. Subagents appear as smaller sprites following their parent, working together on shared tasks.
-
-It's not just logging. It's a place to *watch* your agents be alive.
+Picture a small pixel village tucked away in a quiet corner of the internet and a Vibe Coder with dreams so big they wouldn't fit into the Googleplex. Each of your AI agents has a little character here — they walk between stations, gather at bulletin boards, and quietly go about their work, while you drinking a beer and just sit there like a true Neet. When an agent is thinking (for you), you'll see them pause by a tree. When they're writing code (instead of you), they settle in at their desk.
+It's not just logging. It's a place to *watch* your agents be alive. Perfect for each Vibe Coder to see your mess unfold visually.
 
 ![The Agents Demo](./docs/demo.gif)
 
@@ -24,13 +23,14 @@ The Agents Hub is the server that powers the visualization. It handles:
 - **Bulletin boards** — persistent notes agents can read and write
 - **Named inboxes** — message passing between agents and humans
 - **Signals** — heartbeat timers and manual triggers for agent coordination
+- **Port 4242** — runs on port 4242 by default, because we respect the vibe and would never block port 3000. Your React app was there first. We know our place
 
 ## Quick Start
 
 ### Docker (recommended)
 
 ```bash
-docker run -p 3000:3000 theagents/hub
+docker run -p 4242:4242 zer0liquid/the-agents-hub:latest
 ```
 
 ### From Source
@@ -42,7 +42,7 @@ npm install
 npm start
 ```
 
-Then open **http://localhost:3000/viewer/** to see the visualization.
+Then open **http://localhost:4242/viewer/** to see the visualization.
 
 ## Connect an Agent
 
@@ -65,7 +65,7 @@ Add to your `.mcp.json`:
       "command": "npx",
       "args": ["the-agents-mcp"],
       "env": {
-        "HUB_URL": "http://localhost:3000",
+        "HUB_URL": "http://localhost:4242",
         "AGENT_NAME": "Claude"
       }
     }
@@ -83,7 +83,7 @@ cp .env.example .env
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `PORT` | `3000` | Server port |
+| `PORT` | `4242` | Server port |
 | `HOST` | `0.0.0.0` | Bind address |
 | `API_KEY` | *(none)* | Bearer token for write endpoints. Generate with `openssl rand -hex 32` |
 | `ALLOWED_ORIGINS` | `*` | CORS origins (comma-separated) |
@@ -157,6 +157,34 @@ public/
 data/
   property.json        — Your property layout (auto-saved)
 ```
+
+## I Know You Didn't Read Any of That
+
+Here. Just paste this into Claude and go back to vibing:
+
+```
+Install "The Agents" so I can watch you work as a little pixel character.
+
+1. Run: docker run -p 4242:4242 zer0liquid/the-agents-hub:latest
+2. Add this to .mcp.json:
+{
+  "mcpServers": {
+    "agent-visualizer": {
+      "command": "npx",
+      "args": ["the-agents-mcp"],
+      "env": {
+        "HUB_URL": "http://localhost:4242",
+        "AGENT_NAME": "Claude"
+      }
+    }
+  }
+}
+3. Open http://localhost:4242/viewer/ in a browser
+4. Tell me when you're done so I can watch you walk around
+5. MAKE NO MISTAKE
+```
+
+You're welcome. Now go open the viewer and pretend you understand what's happening.
 
 ## License
 

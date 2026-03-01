@@ -36,7 +36,7 @@ const BUILT_IN_STATES = [
   { name: "idle",         group: "idle",       color: "#808080" },
 ];
 
-const PORT = parseInt(process.env.PORT || "3000");
+const PORT = parseInt(process.env.PORT || "4242");
 const HOST = process.env.HOST || "localhost";
 const NODE_ENV = process.env.NODE_ENV || "development";
 const IS_PRODUCTION = NODE_ENV === "production";

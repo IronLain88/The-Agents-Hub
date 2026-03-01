@@ -5,7 +5,7 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const HUB_URL = process.env.HUB_URL || 'http://localhost:3000';
+const HUB_URL = process.env.HUB_URL || 'http://localhost:4242';
 
 describe('Payload Security Tests', () => {
   let payloadsEnabled = false;

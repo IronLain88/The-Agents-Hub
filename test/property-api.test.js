@@ -1,7 +1,7 @@
 import { describe, it, before } from 'node:test';
 import assert from 'node:assert/strict';
 
-const HUB_URL = process.env.HUB_URL || 'http://localhost:3000';
+const HUB_URL = process.env.HUB_URL || 'http://localhost:4242';
 
 describe('Property API Tests', () => {
   before(async () => {
