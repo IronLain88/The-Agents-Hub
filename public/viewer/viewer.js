@@ -84,6 +84,7 @@ function drawFrame(ctx, dx, dy, w, h, p, style) {
 // --- State ---
 const agents = new Map();
 const characters = new Map();
+const agentLastSeen = new Map();
 const tilesetImages = {};
 const animatedImages = new Map();
 const cutoutImages = new Map();
@@ -238,6 +239,7 @@ function connect() {
       case "agent_removed":
         agents.delete(msg.agent_id);
         characters.delete(msg.agent_id);
+        agentLastSeen.delete(msg.agent_id);
         for (const [, occ] of stationOccupants) occ.delete(msg.agent_id);
         break;
       case "signal":
@@ -420,6 +422,7 @@ function updateAgentPath(agentId, data) {
 
 function handleAgentUpdate(agentId, data) {
   agents.set(agentId, data);
+  agentLastSeen.set(agentId, Date.now());
   const spriteName = data.sprite || CHARACTER_NAME;
   if (!characterSprites[spriteName]) loadCharacterSprites(spriteName);
   updateAgentPath(agentId, data);
@@ -623,9 +626,18 @@ function drawCharacter(ch, data) {
   const facing = ch.facing || "down";
   const pose = ch.pose || "idle";
 
+  const WAITING_MS = 30_000;
+  const isWaiting = (Date.now() - (agentLastSeen.get(data.agent_id) ?? Date.now())) > WAITING_MS;
+  if (isWaiting) {
+    ctx.save();
+    ctx.globalAlpha = 0.4 + 0.3 * Math.sin(animTime * 3);
+  }
+
   const spriteName = data.sprite || CHARACTER_NAME;
   const sprites = characterSprites[spriteName] || characterSprites[CHARACTER_NAME] || {};
   const sprite = sprites[pose] || sprites.idle;
+
+  let indicatorY = ch.drawY - TILE_SIZE * scale;
 
   if (sprite && sprite.naturalWidth) {
     const idleDirMap = { left: 2, up: 1, right: 0, down: 3 };
@@ -648,6 +660,7 @@ function drawCharacter(ch, data) {
 
     // Center sprite on character position
     const drawY = ch.drawY - drawH / 2;
+    indicatorY = drawY - 4;
 
     ctx.drawImage(sprite,
       frameX, 0, charW, charH,
@@ -655,16 +668,17 @@ function drawCharacter(ch, data) {
     );
 
     // Name label
-    const top = drawY;
     ctx.fillStyle = isSubagent ? "#7ff" : "#fff";
     ctx.font = isSubagent ? "bold 6px monospace" : "bold 8px monospace";
     ctx.textAlign = "center";
-    ctx.fillText(data.agent_name || "Agent", ch.drawX, top - 2);
+    ctx.fillText(data.agent_name || "Agent", ch.drawX, drawY - 2);
 
-    if (data.detail) drawBubble(ch.drawX, top - 10, data.detail);
+    if (data.detail) drawBubble(ch.drawX, drawY - 10, data.detail);
   } else {
     // Fallback circle
     const sz = TILE_SIZE * scale;
+    indicatorY = ch.drawY - sz / 2 - 4;
+
     ctx.fillStyle = "#7BBF7B";
     ctx.beginPath();
     ctx.arc(ch.drawX, ch.drawY, sz / 2, 0, Math.PI * 2);
@@ -677,6 +691,29 @@ function drawCharacter(ch, data) {
 
     if (data.detail) drawBubble(ch.drawX, ch.drawY - sz / 2 - 10, data.detail);
   }
+
+  if (isWaiting) {
+    ctx.restore();
+    drawWaitingIndicator(ch.drawX, indicatorY);
+  }
+}
+
+function drawWaitingIndicator(x, y) {
+  const r = 6;
+  const pulse = 0.6 + 0.4 * Math.sin(animTime * 3);
+  ctx.save();
+  ctx.globalAlpha = pulse;
+  ctx.fillStyle = "#ffe066";
+  ctx.beginPath();
+  ctx.arc(x, y - r, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#1a1a1a";
+  ctx.font = "bold 8px monospace";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText("?", x, y - r);
+  ctx.textBaseline = "alphabetic";
+  ctx.restore();
 }
 
 function drawBubble(x, y, text) {
