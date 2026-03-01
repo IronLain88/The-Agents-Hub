@@ -626,11 +626,12 @@ function drawCharacter(ch, data) {
   const facing = ch.facing || "down";
   const pose = ch.pose || "idle";
 
-  const WAITING_MS = 30_000;
-  const isWaiting = (Date.now() - (agentLastSeen.get(data.agent_id) ?? Date.now())) > WAITING_MS;
+  const WAITING_MS = 90_000;
+  const state = data.state || "idle";
+  const isWaiting = state !== "idle" && (Date.now() - (agentLastSeen.get(data.agent_id) ?? Date.now())) > WAITING_MS;
   if (isWaiting) {
     ctx.save();
-    ctx.globalAlpha = 0.4 + 0.3 * Math.sin(animTime * 3);
+    ctx.globalAlpha = 0.25 + 0.4 * Math.sin(animTime * 2);
   }
 
   const spriteName = data.sprite || CHARACTER_NAME;
