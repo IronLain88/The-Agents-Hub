@@ -168,9 +168,11 @@ document.getElementById("file-import").onchange = async (e) => {
 	try {
 		const data = JSON.parse(await file.text());
 		applyProperty(data);
-		statusEl.textContent = `Imported ${file.name}`;
-	} catch {
-		statusEl.textContent = "Import failed — invalid JSON";
+		render();
+		statusEl.textContent = `Imported ${file.name} (${property.floor.length} floor, ${property.assets.length} assets)`;
+	} catch (err) {
+		console.error("Import failed:", err);
+		statusEl.textContent = `Import failed — ${err.message}`;
 	}
 	e.target.value = "";
 };
