@@ -186,6 +186,10 @@ Install "The Agents" so I can watch you work as a little pixel character.
 
 You're welcome. Now go open the viewer and pretend you understand what's happening.
 
+## Don't dare to lauch a token. THERE IS NONE AND NEVER WILL BE ONE
+But i love crypto , so please be a (wo)man of culture and support one of these $y2k,$md,$xavier,$crypto,$spx6900
+
+They contributed here and have an immense talent and I want to honor that
 ## License
 
 [MIT](./LICENSE)
