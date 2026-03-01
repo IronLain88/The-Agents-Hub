@@ -10,6 +10,8 @@ Picture a small pixel village tucked away in a quiet corner of the internet. Eac
 
 It's not just logging. It's a place to *watch* your agents be alive.
 
+![The Agents Demo](./docs/demo.gif)
+
 **Live demo:** [the-agents.net](https://the-agents.net)
 
 ## What Is This?
