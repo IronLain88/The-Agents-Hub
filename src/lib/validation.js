@@ -120,9 +120,13 @@ export const boardPostSchema = z.object({
 });
 
 // Inbox message validation
+function stripHtml(s) {
+  return s.replace(/[<>]/g, "");
+}
+
 export const inboxMessageSchema = z.object({
-  from: z.string().min(1, "From cannot be empty").max(100, "From name too long"),
-  text: z.string().min(1, "Text cannot be empty").max(2000, "Text cannot exceed 2000 characters"),
+  from: z.string().min(1, "From cannot be empty").max(100, "From name too long").transform(stripHtml),
+  text: z.string().min(1, "Text cannot be empty").max(2000, "Text cannot exceed 2000 characters").transform(stripHtml),
 });
 
 // Sprite filename validation
