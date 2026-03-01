@@ -686,14 +686,17 @@ app.post("/api/state", requireAuth, stateLimiter, (req, res) => {
     last_seen: Date.now(),
   };
   // Dedup: if another agent with the same name+owner already exists under a
-  // different ID (e.g. MCP restarted with a new random suffix), remove the old one.
-  // Only dedup main agents (not subagents) to avoid removing legitimate parallel subagents.
+  // different ID (e.g. MCP restarted with a new random suffix), remove the stale one.
+  // Only dedup main agents, and only if the existing entry is stale (>30s no activity).
+  // This preserves legitimate parallel instances while cleaning up restarts.
   if (!parent_agent_id) {
+    const STALE_MS = 30_000;
     for (const [existingId, existing] of agents) {
       if (existingId !== agent_id
         && existing.agent_name === entry.agent_name
         && existing.owner_id === entry.owner_id
-        && !existing.parent_agent_id) {
+        && !existing.parent_agent_id
+        && (Date.now() - existing.last_seen) > STALE_MS) {
         agents.delete(existingId);
         broadcast({ type: "agent_removed", agent_id: existingId });
       }
