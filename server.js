@@ -77,7 +77,8 @@ app.use(helmet({
       connectSrc: ["'self'", "ws:", "wss:"],
     }
   },
-  crossOriginEmbedderPolicy: false // Allow loading assets
+  crossOriginEmbedderPolicy: false, // Allow loading assets
+  crossOriginResourcePolicy: { policy: "cross-origin" } // Allow VS Code webview to load images
 }));
 
 // CORS configuration
@@ -85,7 +86,8 @@ const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS?.split(',') || ['*'];
 app.use(cors({
   origin: (origin, callback) => {
     // Allow requests with no origin (like mobile apps or curl)
-    if (!origin || ALLOWED_ORIGINS.includes('*') || ALLOWED_ORIGINS.includes(origin)) {
+    if (!origin || ALLOWED_ORIGINS.includes('*') || ALLOWED_ORIGINS.includes(origin)
+        || ALLOWED_ORIGINS.some(o => o.endsWith('*') && origin.startsWith(o.slice(0, -1)))) {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));
@@ -158,7 +160,7 @@ app.get("/api/states", (_req, res) => res.json({
   groups: ["reasoning", "gathering", "creating", "idle"],
   custom_states_allowed: true,
 }));
-app.get("/", (_req, res) => res.redirect("/viewer/"));
+app.get("/", (_req, res) => res.sendFile(join(__dirname, "public", "index.html")));
 app.use("/viewer", express.static(join(__dirname, "public", "viewer")));
 app.use("/editor", express.static(join(__dirname, "public", "editor")));
 const TILESETS_DIR = join(__dirname, "public", "assets", "tilesets");

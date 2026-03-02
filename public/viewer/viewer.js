@@ -629,10 +629,6 @@ function drawCharacter(ch, data) {
   const WAITING_MS = 90_000;
   const state = data.state || "idle";
   const isWaiting = state !== "idle" && (Date.now() - (agentLastSeen.get(data.agent_id) ?? Date.now())) > WAITING_MS;
-  if (isWaiting) {
-    ctx.save();
-    ctx.globalAlpha = 0.25 + 0.4 * Math.sin(animTime * 2);
-  }
 
   const spriteName = data.sprite || CHARACTER_NAME;
   const sprites = characterSprites[spriteName] || characterSprites[CHARACTER_NAME] || {};
@@ -694,7 +690,6 @@ function drawCharacter(ch, data) {
   }
 
   if (isWaiting) {
-    ctx.restore();
     drawWaitingIndicator(ch.drawX, indicatorY);
   }
 }

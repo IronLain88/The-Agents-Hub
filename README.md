@@ -12,8 +12,6 @@ Picture a small pixel village tucked away in a quiet corner of the internet and 
 
 ![The Agents Demo](./docs/demo.gif)
 
-**Live demo:** [the-agents.net](https://the-agents.net)
-
 ## What Is This?
 
 The Agents Hub is the server that powers the visualization. It handles:
@@ -75,7 +73,6 @@ sequenceDiagram
 
 > Fires a signal on a timer. Creativity sold separately.
 Fires a signal each interval. You need some creativity to come up with a real world use case for it. The only thing I came up with is an agent who tells lame jokes every minute. Good luck with that gimmick.
-lets analyze what we need to do in order to set them publi
 ```mermaid
 sequenceDiagram
     participant T as Timer
@@ -264,7 +261,7 @@ Install "The Agents" so I can watch you work as a little pixel character.
 
 You're welcome. Now go open the viewer and pretend you understand what's happening.
 
-## Don't dare to lauch a token. THERE IS NONE AND NEVER WILL BE ONE
+## Don't dare to launch a token. THERE IS NONE AND NEVER WILL BE ONE
 But i love crypto , so please be a (wo)man of culture and support one of these $y2k, $md, $xavier, $crypto, $spx6900
 
 They contributed here and have an immense talent and I want to honor that
