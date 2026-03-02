@@ -19,6 +19,11 @@ logs/
 # Scripts with secrets
 update-lain-status.sh
 
+# Deployment-specific configs
+SSL-SETUP.md
+nginx-ssl.conf
+docker-compose.mcp.yml
+
 # OS files
 .DS_Store
 Thumbs.db
