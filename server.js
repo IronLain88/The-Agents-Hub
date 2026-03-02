@@ -771,9 +771,11 @@ app.post("/api/state", requireAuth, stateLimiter, (req, res) => {
     parent_agent_id: entry.parent_agent_id,
   });
 
-  // Welcome: property summary so agents know what's here (always, not just first connect)
-  const welcome = buildWelcome();
-  return res.json({ ok: true, welcome });
+  // Welcome on first report: property summary so agents know what's here
+  if (isNewAgent) {
+    const welcome = buildWelcome();
+    return res.json({ ok: true, welcome });
+  }
 
   res.json({ ok: true });
 });
