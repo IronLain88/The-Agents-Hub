@@ -644,10 +644,15 @@ function buildWelcome() {
   const stations = [];
   const signals = [];
   const boards = [];
+  const tasks = [];
   let inboxCount = 0;
 
   for (const a of assets) {
     if (!a.station) continue;
+    if (a.task) {
+      tasks.push(`${a.station} — ${a.instructions || "(no instructions)"}`);
+      continue;
+    }
     if (a.trigger) {
       signals.push(`${a.name || a.station} (${a.trigger})`);
     } else if (a.station.startsWith("inbox") && a.content?.data) {
@@ -668,7 +673,7 @@ function buildWelcome() {
     others.push({ name: entry.agent_name, state: entry.state });
   }
 
-  return { stations, signals, boards, inbox: inboxCount, agents: others };
+  return { stations, signals, boards, tasks, inbox: inboxCount, agents: others };
 }
 
 // POST /api/state — agent reports its state
