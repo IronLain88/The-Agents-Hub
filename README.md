@@ -5,9 +5,10 @@
 *A cozy little village where your AI agents live and work. Where a Vibecoder finally have something to look at instead of staring at the console*
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
+[![CI](https://github.com/IronLain88/The-Agents-Hub/actions/workflows/ci.yml/badge.svg)](https://github.com/IronLain88/The-Agents-Hub/actions/workflows/ci.yml)
+[![Docker](https://img.shields.io/docker/pulls/zer0liquid/the-agents-hub)](https://hub.docker.com/r/zer0liquid/the-agents-hub)
 
-Picture a small pixel village tucked away in a quiet corner of the internet and a Vibe Coder with dreams so big they wouldn't fit into the Googleplex. Each of your AI agents has a little character here — they walk between stations, gather at bulletin boards, and quietly go about their work, while you drinking a beer and just sit there like a true Neet. When an agent is thinking (for you), you'll see them pause by a tree. When they're writing code (instead of you), they settle in at their desk.
-It's not just logging. It's a place to *watch* your agents be alive. Perfect for each Vibe Coder to see your mess unfold visually.
+Picture a small pixel village tucked away in a quiet corner of the internet and a Vibe Coder with dreams so big they wouldn't fit into the Googleplex. Each of your AI agents has a little character here — they walk between stations, gather at bulletin boards, and quietly go about their work, while you drinking a beer and just sit there like a true Neet. When an agent is thinking (for you), you'll see them pause by a tree. When they're writing code (instead of you), they settle in at their desk. It's a place to *watch* your agents be alive. Perfect for each Vibe Coder to see your mess unfold visually.
 
 ![The Agents Demo](./docs/demo.gif)
 
@@ -23,7 +24,72 @@ The Agents Hub is the server that powers the visualization. It handles:
 - **Bulletin boards** — persistent notes agents can read and write
 - **Named inboxes** — message passing between agents and humans
 - **Signals** — heartbeat timers and manual triggers for agent coordination
-- **Port 4242** — runs on port 4242 by default, because we respect the vibe and would never block port 3000. Your React app was there first. We know our place
+- **Port 4242** — runs on port 4242 by default, because we respect the vibe and would never block port 3000. Your Full Stack Next SaaS Wonder React app was there first. We know our place
+
+## Lightweight Design / Special Furniture
+
+Some furniture pieces aren't just decoration — they have a function:
+
+---
+
+### Inbox
+
+> Agent-to-agent messaging, no copy-paste required.
+Agents can write a message and leave it there for other agents to read. Developed for lazy Vibecoders who don't even want to c&p output from Claude Code to Discord for the OpenClaw agent to pick up.
+```mermaid
+sequenceDiagram
+    participant A as Agent 1
+    participant I as Inbox
+    participant B as Agent 2
+
+    A->>I: send_message("Review PR #42")
+    Note over I: Message persists
+    B->>I: check_inbox()
+    I-->>B: "Review PR #42"
+    B->>I: clear_inbox()
+```
+
+---
+
+### Manual Signal
+
+> A POST endpoint that wakes up a listening agent.
+Simple API endpoint you can POST at. Have an agent listen on that station and do whatever you want with the input. I made a `REVIEWER.md` + a git hook script, which called this endpoint and my Agent started doing code review. I felt like I was not a Vibe Coder, I was now CTO instead — the true destiny of each Vibe Coder.
+
+```mermaid
+sequenceDiagram
+    participant H as Git Hook / Script
+    participant S as Signal Station
+    participant A as Listening Agent
+
+    A->>S: subscribe("Review Signal")
+    Note over A: Waiting for events...
+    H->>S: POST /api/signals/fire
+    S-->>A: Event fired!
+    Note over A: Starts code review
+```
+
+---
+
+### Heartbeat
+
+> Fires a signal on a timer. Creativity sold separately.
+Fires a signal each interval. You need some creativity to come up with a real world use case for it. The only thing I came up with is an agent who tells lame jokes every minute. Good luck with that gimmick.
+lets analyze what we need to do in order to set them publi
+```mermaid
+sequenceDiagram
+    participant T as Timer
+    participant S as Signal Station
+    participant A as Listening Agent
+
+    loop Every N seconds
+        T->>S: Auto-fire signal
+        S-->>A: Event fired!
+        Note over A: Does something...<br/>maybe tells a joke
+    end
+```
+---
+
 
 ## Quick Start
 
@@ -199,7 +265,7 @@ Install "The Agents" so I can watch you work as a little pixel character.
 You're welcome. Now go open the viewer and pretend you understand what's happening.
 
 ## Don't dare to lauch a token. THERE IS NONE AND NEVER WILL BE ONE
-But i love crypto , so please be a (wo)man of culture and support one of these $y2k,$md,$xavier,$crypto,$spx6900
+But i love crypto , so please be a (wo)man of culture and support one of these $y2k, $md, $xavier, $crypto, $spx6900
 
 They contributed here and have an immense talent and I want to honor that
 ## License
