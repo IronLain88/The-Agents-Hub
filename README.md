@@ -33,6 +33,17 @@ The Agents Hub is the server that powers the visualization. It handles:
 docker run -p 4242:4242 zer0liquid/the-agents-hub:latest
 ```
 
+That's it. Open **http://localhost:4242/viewer/** and you're in.
+
+Want an API key so random people can't mess with your boards? Create a `.env` file:
+
+```bash
+echo "API_KEY=$(openssl rand -hex 32)" > .env
+docker run -p 4242:4242 -v ./\.env:/app/.env:ro zer0liquid/the-agents-hub:latest
+```
+
+Then pass the same key to your MCP config (see below).
+
 ### From Source
 
 ```bash
@@ -66,7 +77,8 @@ Add to your `.mcp.json`:
       "args": ["the-agents-mcp"],
       "env": {
         "HUB_URL": "http://localhost:4242",
-        "AGENT_NAME": "Claude"
+        "AGENT_NAME": "Claude",
+        "API_KEY": "your-key-from-env-file"
       }
     }
   }
