@@ -35,7 +35,7 @@ if (!CONFIG.apiKey) CONFIG.apiKey = localStorage.getItem("editor_api_key") || ""
       clearBtn.style.cssText = 'margin-left:12px;font-size:12px;cursor:pointer;color:#888;';
       clearBtn.title = 'Remove all agents from the viewer';
       clearBtn.onclick = async () => {
-        const res = await fetch(`${location.origin}/api/agents`, {
+        const res = await fetch(`${HUB_HTTP_URL}/api/agents`, {
           method: 'DELETE',
           headers: { Authorization: `Bearer ${CONFIG.apiKey}` },
         });
@@ -1542,6 +1542,22 @@ function showTask(asset) {
     spinner.textContent = 'Task in progress...';
     spinner.style.cssText = 'color:#888;font-style:italic;';
     box.appendChild(spinner);
+
+    if (CONFIG.apiKey) {
+      const cancel = document.createElement('button');
+      cancel.textContent = 'Cancel';
+      cancel.style.cssText = 'margin-top:8px;background:#5a3a3a;color:#ccc;border:none;border-radius:4px;padding:6px 16px;cursor:pointer;font-family:monospace;font-size:12px;';
+      cancel.onclick = async () => {
+        cancel.disabled = true;
+        try {
+          await fetch(`${HUB_HTTP_URL}/api/task/${encodeURIComponent(station)}/clear`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${CONFIG.apiKey}` },
+          });
+        } catch {}
+      };
+      box.appendChild(cancel);
+    }
   } else if (state.status === 'done') {
     const resultEl = document.createElement('div');
     resultEl.style.cssText = 'line-height:1.6;color:#ddd;margin-bottom:12px;';
