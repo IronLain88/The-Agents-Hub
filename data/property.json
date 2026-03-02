@@ -4963,20 +4963,6 @@
 			"layer": "wall"
 		},
 		{
-			"id": "asset-1772388074941-21t6",
-			"position": {
-				"x": 11,
-				"y": 3
-			},
-			"sprite": {
-				"image": "the_agents_poster.png",
-				"pw": 30,
-				"ph": 30,
-				"padding": 0,
-				"frame": "none"
-			}
-		},
-		{
 			"id": "asset-1772388115971-pu0m",
 			"position": {
 				"x": 9,
@@ -5793,6 +5779,20 @@
 					"dir": "on"
 				}
 			]
+		},
+		{
+			"id": "asset-1772454245447-cwga",
+			"position": {
+				"x": 10,
+				"y": 2
+			},
+			"sprite": {
+				"image": "the_agents_poster.png",
+				"pw": 60,
+				"ph": 60,
+				"padding": 0,
+				"frame": "none"
+			}
 		}
 	],
 	"collision": []
