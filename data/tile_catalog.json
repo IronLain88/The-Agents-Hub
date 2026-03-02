@@ -22,15 +22,6 @@
 					"collision": "solid"
 				},
 				{
-					"src": "office_16x16",
-					"tx": 6,
-					"ty": 3,
-					"w": 1,
-					"h": 2,
-					"label": "Wall_Wood",
-					"collision": "solid"
-				},
-				{
 					"src": "concrete_2",
 					"tx": 1,
 					"ty": 0,
@@ -95,6 +86,36 @@
 					"label": "Concrete_top",
 					"layer": "wall",
 					"collision": "solid"
+				},
+				{
+					"src": "office_16x16",
+					"tx": 6,
+					"ty": 3,
+					"w": 1,
+					"h": 2,
+					"label": "Wall_Wood",
+					"collision": "solid",
+					"layer": "wall"
+				},
+				{
+					"src": "office_16x16",
+					"tx": 2,
+					"ty": 5,
+					"w": 1,
+					"h": 2,
+					"label": "Wall_Wood2",
+					"collision": "solid",
+					"layer": "wall"
+				},
+				{
+					"src": "office_16x16",
+					"tx": 5,
+					"ty": 1,
+					"w": 1,
+					"h": 1,
+					"label": "Side_Wall_2",
+					"collision": "solid",
+					"layer": "wall"
 				}
 			]
 		},
@@ -322,6 +343,32 @@
 					"station": "querying",
 					"approach": "below",
 					"collision": "solid"
+				},
+				{
+					"src": "office_16x16",
+					"tx": 2,
+					"ty": 3,
+					"w": 1,
+					"h": 2,
+					"label": "Wall_Wood3",
+					"collision": "solid"
+				},
+				{
+					"src": "delivery",
+					"tx": 9,
+					"ty": 5,
+					"w": 2,
+					"h": 3,
+					"label": "Searching_Table",
+					"station": "searching",
+					"approach": "on",
+					"approaches": [
+						{
+							"x": 0.5,
+							"y": 1.5,
+							"dir": "on"
+						}
+					]
 				}
 			]
 		},
@@ -405,6 +452,14 @@
 					"pw": 60,
 					"ph": 40,
 					"label": "y2k_coded_carpet",
+					"padding": 0,
+					"frame": "none"
+				},
+				{
+					"image": "the_agents_poster.png",
+					"pw": 60,
+					"ph": 60,
+					"label": "the_agents_poster_big",
 					"padding": 0,
 					"frame": "none"
 				}

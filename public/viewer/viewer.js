@@ -558,17 +558,19 @@ function drawAssetIndicators(asset, propX, propY) {
         ctx.fill();
       }
     } else {
-      // Heartbeat: continuous expanding ring
-      const interval = asset.trigger_interval || 60;
-      const speed = Math.max(0.5, 6 / interval);
-      const phase = (animTime * speed) % 1;
-      const radius = 4 + phase * 12;
-      const alpha = 0.6 * (1 - phase);
-      ctx.strokeStyle = `rgba(80, 160, 255, ${alpha})`;
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-      ctx.stroke();
+      // Heartbeat: expanding ring only when recently fired
+      const lastFire = signalFlash.get(asset.station) || 0;
+      const elapsed = Date.now() - lastFire;
+      if (elapsed < 2000) {
+        const phase = (animTime * 4) % 1;
+        const radius = 4 + phase * 12;
+        const alpha = 0.6 * (1 - phase);
+        ctx.strokeStyle = `rgba(80, 160, 255, ${alpha})`;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+        ctx.stroke();
+      }
     }
     return;
   }
@@ -1287,7 +1289,8 @@ function showSignalInfo(asset) {
     editableInterval = { station, currentInterval: interval };
   }
 
-  showModal(`🔔 ${station}`, desc, false, setup, editableInterval, asset);
+  const fireBtn = trigger === 'manual' ? { station } : null;
+  showModal(`🔔 ${station}`, desc, false, setup, editableInterval, asset, null, fireBtn);
 }
 
 function showPayloadWarning() {
@@ -1440,7 +1443,7 @@ async function showActivityLog(asset) {
   showModal('📋 Activity Log', content, true, setup);
 }
 
-function showModal(title, content, scrollable = false, setupInstructions = null, editableInterval = null, signalAsset = null, onReady = null) {
+function showModal(title, content, scrollable = false, setupInstructions = null, editableInterval = null, signalAsset = null, onReady = null, fireBtn = null) {
   // Remove existing modal if any
   const existing = document.getElementById('station-modal');
   if (existing) existing.remove();
@@ -1594,7 +1597,7 @@ function showModal(title, content, scrollable = false, setupInstructions = null,
 
         const saveResponse = await fetch('/api/property', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...(CONFIG.apiKey && { Authorization: `Bearer ${CONFIG.apiKey}` }) },
           body: JSON.stringify(property)
         });
 
@@ -1659,7 +1662,7 @@ function showModal(title, content, scrollable = false, setupInstructions = null,
         // Save updated property
         const saveResponse = await fetch('/api/property', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...(CONFIG.apiKey && { Authorization: `Bearer ${CONFIG.apiKey}` }) },
           body: JSON.stringify(property)
         });
 
@@ -1759,7 +1762,7 @@ function showModal(title, content, scrollable = false, setupInstructions = null,
       try {
         const response = await fetch('/api/signals/set-interval', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...(CONFIG.apiKey && { Authorization: `Bearer ${CONFIG.apiKey}` }) },
           body: JSON.stringify({ station: editableInterval.station, interval: newInterval })
         });
 
@@ -1789,6 +1792,69 @@ function showModal(title, content, scrollable = false, setupInstructions = null,
     intervalContainer.appendChild(statusMsg);
 
     box.appendChild(intervalContainer);
+  }
+
+  // Add fire button for manual signals
+  if (fireBtn) {
+    const fireContainer = document.createElement('div');
+    fireContainer.style.cssText = `
+      margin-top: 12px;
+      padding: 8px;
+      background: #2a2a48;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    `;
+
+    const fireButton = document.createElement('button');
+    fireButton.textContent = '🔥 Fire Signal';
+    fireButton.style.cssText = `
+      padding: 6px 16px;
+      background: #d08040;
+      border: none;
+      border-radius: 3px;
+      color: #fff;
+      cursor: pointer;
+      font-family: monospace;
+      font-size: 13px;
+      font-weight: bold;
+    `;
+    fireButton.onmouseover = () => fireButton.style.background = '#e09050';
+    fireButton.onmouseout = () => fireButton.style.background = '#d08040';
+
+    const fireStatus = document.createElement('span');
+    fireStatus.style.cssText = 'color: #888; font-size: 11px; margin-left: 8px;';
+
+    fireButton.onclick = async () => {
+      fireButton.disabled = true;
+      fireButton.style.opacity = '0.6';
+      try {
+        const response = await fetch('/api/signals/fire', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...(CONFIG.apiKey && { Authorization: `Bearer ${CONFIG.apiKey}` }) },
+          body: JSON.stringify({ station: fireBtn.station })
+        });
+        if (response.ok) {
+          fireStatus.textContent = '✓ Fired!';
+          fireStatus.style.color = '#60d060';
+        } else {
+          const err = await response.json().catch(() => ({}));
+          fireStatus.textContent = `❌ ${err.error || 'Failed'}`;
+          fireStatus.style.color = '#d04040';
+        }
+      } catch {
+        fireStatus.textContent = '❌ Error';
+        fireStatus.style.color = '#d04040';
+      }
+      fireButton.disabled = false;
+      fireButton.style.opacity = '1';
+      setTimeout(() => fireStatus.textContent = '', 3000);
+    };
+
+    fireContainer.appendChild(fireButton);
+    fireContainer.appendChild(fireStatus);
+    box.appendChild(fireContainer);
   }
 
   // Add collapsible setup instructions if provided
