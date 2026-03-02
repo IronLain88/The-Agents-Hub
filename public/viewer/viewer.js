@@ -27,6 +27,22 @@ if (!CONFIG.apiKey) CONFIG.apiKey = localStorage.getItem("editor_api_key") || ""
       render();
     };
     render();
+
+    // Clear agents button (authed only)
+    if (CONFIG.apiKey) {
+      const clearBtn = document.createElement('span');
+      clearBtn.textContent = '\u21bb Clear agents';
+      clearBtn.style.cssText = 'margin-left:12px;font-size:12px;cursor:pointer;color:#888;';
+      clearBtn.title = 'Remove all agents from the viewer';
+      clearBtn.onclick = async () => {
+        const res = await fetch(`${location.origin}/api/agents`, {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${CONFIG.apiKey}` },
+        });
+        if (res.ok) { const d = await res.json(); clearBtn.textContent = `\u2713 Cleared ${d.cleared}`; setTimeout(() => clearBtn.textContent = '\u21bb Clear agents', 2000); }
+      };
+      el.after(clearBtn);
+    }
   }
 }
 const HUB_WS_URL = CONFIG.hubWsUrl || `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}`;

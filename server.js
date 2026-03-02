@@ -1319,6 +1319,17 @@ app.get("/api/board/:station/remote", requireBoard, requireRemoteBoard, async (r
   }
 });
 
+// DELETE /api/agents — clear all agents (requires auth)
+app.delete("/api/agents", requireAuth, (req, res) => {
+  const count = agents.size;
+  for (const [id] of agents) {
+    broadcast({ type: "agent_removed", agent_id: id });
+  }
+  agents.clear();
+  console.log(`[hub] Cleared ${count} agents`);
+  res.json({ ok: true, cleared: count });
+});
+
 // Heartbeat: remove agents not seen for 3 minutes
 setInterval(() => {
   const cutoff = Date.now() - 180_000;
