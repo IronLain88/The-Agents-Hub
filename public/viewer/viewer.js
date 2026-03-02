@@ -831,6 +831,28 @@ canvas.addEventListener("wheel", (e) => {
   camera.y += (my / oldZoom - camera.y) * ratio * oldZoom / camera.zoom;
 }, { passive: false });
 
+// Pinch-to-zoom
+let pinchStartDist = 0;
+let pinchStartZoom = 1;
+canvas.addEventListener("touchstart", (e) => {
+  if (e.touches.length === 2) {
+    e.preventDefault();
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    pinchStartDist = Math.hypot(dx, dy);
+    pinchStartZoom = camera.zoom;
+  }
+}, { passive: false });
+canvas.addEventListener("touchmove", (e) => {
+  if (e.touches.length === 2) {
+    e.preventDefault();
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    const dist = Math.hypot(dx, dy);
+    camera.zoom = Math.max(0.5, Math.min(6, pinchStartZoom * (dist / pinchStartDist)));
+  }
+}, { passive: false });
+
 let pointerDownPos = null;
 let hasDragged = false;
 
@@ -871,7 +893,7 @@ canvas.addEventListener("pointerup", (e) => {
 
 function drawTitle() {
   const cx = 22;
-  const cy = canvas.height - 26;
+  const cy = (canvas.clientHeight || canvas.height) - 26;
   const dw = 7;
   const dh = 11;
 
@@ -900,13 +922,15 @@ let lastTime = 0;
 let needsCenter = true;
 
 function centerCamera() {
-  if (canvas.width > 0 && canvas.height > 0) {
+  const cssW = canvas.clientWidth || canvas.width;
+  const cssH = canvas.clientHeight || canvas.height;
+  if (cssW > 0 && cssH > 0) {
     const worldW = GRID_W * TILE_SIZE;
     const worldH = GRID_H * TILE_SIZE;
     camera.x = -worldW / 2;
     camera.y = -worldH / 2;
-    const zoomX = canvas.width / worldW;
-    const zoomY = canvas.height / worldH;
+    const zoomX = cssW / worldW;
+    const zoomY = cssH / worldH;
     camera.zoom = Math.max(0.5, Math.min(6, Math.min(zoomX, zoomY) * 0.9));
   }
 }
@@ -916,7 +940,7 @@ function loop(time) {
     const dt = Math.min((time - lastTime) / 1000, 0.1);
     lastTime = time;
 
-    if (needsCenter && canvas.width > 0) {
+    if (needsCenter && (canvas.clientWidth || canvas.width) > 0) {
       centerCamera();
       needsCenter = false;
     }
@@ -966,10 +990,12 @@ function loop(time) {
     // Draw
     ctx.imageSmoothingEnabled = false;
     ctx.save();
+    const cssW = canvas.clientWidth || canvas.width;
+    const cssH = canvas.clientHeight || canvas.height;
     ctx.fillStyle = "#0e1e2a";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillRect(0, 0, cssW, cssH);
 
-    ctx.translate(canvas.width / 2, canvas.height / 2);
+    ctx.translate(cssW / 2, cssH / 2);
     ctx.scale(camera.zoom, camera.zoom);
     ctx.translate(camera.x, camera.y);
 
@@ -1006,9 +1032,13 @@ function loop(time) {
 function resize() {
   const w = window.innerWidth;
   const h = window.innerHeight;
+  const dpr = window.devicePixelRatio || 1;
   if (w > 0 && h > 0) {
-    canvas.width = w;
-    canvas.height = h;
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+    canvas.style.width = w + "px";
+    canvas.style.height = h + "px";
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 }
 
@@ -1033,8 +1063,10 @@ function screenToWorld(screenX, screenY) {
   const rect = canvas.getBoundingClientRect();
   const canvasX = screenX - rect.left;
   const canvasY = screenY - rect.top;
-  const worldX = (canvasX - canvas.width / 2) / camera.zoom - camera.x;
-  const worldY = (canvasY - canvas.height / 2) / camera.zoom - camera.y;
+  const cssW = rect.width;
+  const cssH = rect.height;
+  const worldX = (canvasX - cssW / 2) / camera.zoom - camera.x;
+  const worldY = (canvasY - cssH / 2) / camera.zoom - camera.y;
   return { x: worldX, y: worldY };
 }
 

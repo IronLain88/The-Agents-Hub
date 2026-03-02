@@ -51,6 +51,7 @@ body {
   height: 100vh;
   image-rendering: pixelated;
   cursor: grab;
+  touch-action: none;
 }
 
 #village:active {
