@@ -16,6 +16,9 @@ data/*
 *.log
 logs/
 
+# Scripts with secrets
+update-lain-status.sh
+
 # OS files
 .DS_Store
 Thumbs.db
