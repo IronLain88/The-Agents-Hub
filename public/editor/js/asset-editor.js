@@ -166,6 +166,10 @@ function updateConfigFromSelection() {
 	document.getElementById("cfg-special").value = "inbox";
 	document.getElementById("cfg-interval").value = "1";
 	document.getElementById("cfg-interval-label").style.display = "none";
+	document.getElementById("cfg-instructions").value = "";
+	document.getElementById("cfg-instructions-label").style.display = "none";
+	document.getElementById("cfg-task-public").checked = true;
+	document.getElementById("cfg-task-public-label").style.display = "none";
 	approachPositions = [null, null, null];
 	placingSlot = -1;
 	updatePosButtons();
@@ -243,8 +247,9 @@ document.getElementById("cfg-approach").addEventListener("change", () => {
 });
 document.getElementById("cfg-special").addEventListener("change", () => {
 	const specialValue = document.getElementById("cfg-special").value;
-	const intervalLabel = document.getElementById("cfg-interval-label");
-	intervalLabel.style.display = specialValue === "signal-heartbeat" ? "" : "none";
+	document.getElementById("cfg-interval-label").style.display = specialValue === "signal-heartbeat" ? "" : "none";
+	document.getElementById("cfg-instructions-label").style.display = specialValue === "reception" || specialValue === "task" ? "" : "none";
+	document.getElementById("cfg-task-public-label").style.display = specialValue === "task" ? "" : "none";
 });
 document.getElementById("cfg-pose").addEventListener("change", renderApproachPreview);
 document.getElementById("cfg-facing").addEventListener("change", renderApproachPreview);
@@ -808,13 +813,19 @@ function buildCatalogItems() {
 			document.getElementById("cfg-label").value = tile.label || "";
 			document.getElementById("cfg-station").value = tile.station || "";
 			// Load special type fields
-			const specialValue = tile.trigger === "manual" ? "signal-manual"
+			const specialValue = tile.task ? "task"
+				: tile.reception ? "reception"
+				: tile.trigger === "manual" ? "signal-manual"
 				: tile.trigger === "heartbeat" ? "signal-heartbeat"
 				: tile.station === "inbox" ? "inbox"
 				: "news-desk";
 			document.getElementById("cfg-special").value = specialValue;
 			document.getElementById("cfg-interval").value = tile.trigger_interval || 1;
 			document.getElementById("cfg-interval-label").style.display = specialValue === "signal-heartbeat" ? "" : "none";
+			document.getElementById("cfg-instructions").value = tile.instructions || "";
+			document.getElementById("cfg-instructions-label").style.display = specialValue === "reception" || specialValue === "task" ? "" : "none";
+			document.getElementById("cfg-task-public").checked = tile.task_public !== false;
+			document.getElementById("cfg-task-public-label").style.display = specialValue === "task" ? "" : "none";
 			document.getElementById("cfg-approach").value = tile.approach || "below";
 			document.getElementById("cfg-pose").value = tile.pose || "idle";
 			document.getElementById("cfg-facing").value = tile.facing || "auto";
@@ -901,6 +912,19 @@ function applyTileMetadata(tile) {
 			tile.station = "inbox";
 		} else if (specialValue === "news-desk") {
 			tile.station = label || "News Desk";
+		} else if (specialValue === "reception") {
+			tile.reception = true;
+			tile.trigger = "manual";
+			tile.station = label || "Help Desk";
+			const instructions = document.getElementById("cfg-instructions").value.trim();
+			if (instructions) tile.instructions = instructions;
+		} else if (specialValue === "task") {
+			tile.task = true;
+			tile.trigger = "manual";
+			tile.station = label || "Task";
+			tile.task_public = document.getElementById("cfg-task-public").checked;
+			const instructions = document.getElementById("cfg-instructions").value.trim();
+			if (instructions) tile.instructions = instructions;
 		}
 		const approach = document.getElementById("cfg-approach").value;
 		if (approach) tile.approach = approach;

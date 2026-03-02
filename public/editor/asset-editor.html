@@ -72,9 +72,15 @@
 							<option value="news-desk">News Desk</option>
 							<option value="signal-manual">Signal Manual</option>
 							<option value="signal-heartbeat">Signal Heartbeat</option>
+							<option value="reception">Reception</option>
+							<option value="task">Task</option>
 						</select>
 					</label>
 					<label id="cfg-interval-label" style="display:none">Interval (min) <input type="number" id="cfg-interval" value="1" min="1"></label>
+					<label id="cfg-instructions-label" style="display:none">Instructions <textarea id="cfg-instructions" rows="3" placeholder="Private instructions for the agent..." style="width:100%;font-family:monospace;font-size:11px;resize:vertical"></textarea></label>
+					<label id="cfg-task-public-label" style="display:none;flex-direction:row;align-items:center;gap:6px">
+						<input type="checkbox" id="cfg-task-public" checked> Anyone can run
+					</label>
 					<label id="cfg-approach-label">Approach
 						<select id="cfg-approach">
 							<option value="">none</option>

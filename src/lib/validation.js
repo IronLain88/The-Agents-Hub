@@ -96,6 +96,24 @@ export const addAssetSchema = z.object({
   collision: z.boolean().optional(),
   remote_url: z.string().max(500).optional(),
   remote_station: z.string().max(100).optional(),
+  reception: z.boolean().optional(),
+  task: z.boolean().optional(),
+  task_public: z.boolean().optional(),
+  instructions: z.string().max(5000).optional(),
+});
+
+// Reception Q&A validation
+export const receptionAskSchema = z.object({
+  question: z.string().min(1, "Question cannot be empty").max(2000, "Question too long"),
+});
+
+export const receptionAnswerSchema = z.object({
+  answer: z.string().min(1, "Answer cannot be empty").max(50000, "Answer too long"),
+});
+
+// Task station validation
+export const taskResultSchema = z.object({
+  result: z.string().min(1, "Result cannot be empty").max(50000, "Result too long"),
 });
 
 export const patchAssetSchema = z.object({

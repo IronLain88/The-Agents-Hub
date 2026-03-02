@@ -795,8 +795,31 @@ function paintAt(gx, gy) {
 		if (selectedPalette.approaches) asset.approaches = selectedPalette.approaches;
 		if (selectedPalette.collision === "solid") asset.collision = true;
 		if (selectedPalette.layer || selectedPalette._category === "Walls") asset.layer = "wall";
+		// Reception assets: prompt for name, copy reception + trigger fields
+		if (selectedPalette.reception) {
+			const defaultName = selectedPalette.label || "Help Desk";
+			const name = prompt("Name this reception desk:", defaultName);
+			if (!name) return;
+			asset.station = name;
+			asset.reception = true;
+			asset.trigger = "manual";
+			if (selectedPalette.instructions) asset.instructions = selectedPalette.instructions;
+			asset.content = { type: "reception", data: JSON.stringify({ status: "idle", question: null, answer: null }) };
+		}
+		// Task assets: prompt for name, copy task + trigger + group fields
+		else if (selectedPalette.task) {
+			const defaultName = selectedPalette.label || "Task";
+			const name = prompt("Name this task station:", defaultName);
+			if (!name) return;
+			asset.station = name;
+			asset.task = true;
+			asset.trigger = "manual";
+			asset.task_public = selectedPalette.task_public !== false;
+			if (selectedPalette.instructions) asset.instructions = selectedPalette.instructions;
+			asset.content = { type: "task", data: JSON.stringify({ status: "idle", result: null }) };
+		}
 		// Signal assets: prompt for name, copy trigger fields
-		if (selectedPalette.trigger) {
+		else if (selectedPalette.trigger) {
 			const existing = property.assets.filter(a => a.trigger === selectedPalette.trigger).length;
 			const defaultName = `${selectedPalette.label || selectedPalette.trigger} ${existing + 1}`;
 			const name = prompt("Name this signal:", defaultName);

@@ -232,6 +232,16 @@ function connect() {
         break;
       case "property_update":
         applyPropertyData(msg.property);
+        // Auto-refresh open reception modal
+        if (openReceptionStation && msg.property?.assets) {
+          const asset = msg.property.assets.find(a => a.station === openReceptionStation && a.reception);
+          if (asset) showReception(asset);
+        }
+        // Auto-refresh open task modal
+        if (openTaskStation && msg.property?.assets) {
+          const asset = msg.property.assets.find(a => a.station === openTaskStation && a.task);
+          if (asset) showTask(asset);
+        }
         break;
       case "agent_update":
         handleAgentUpdate(msg.agent_id, msg);
@@ -529,6 +539,27 @@ function drawAssetIndicators(asset, propX, propY) {
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(msgs.length > 99 ? '99+' : String(msgs.length), bx, by);
+    }
+    return;
+  }
+
+  // Task station: pulsing glow based on state
+  if (asset.task) {
+    let status = 'idle';
+    try {
+      const d = typeof asset.content?.data === 'string' ? JSON.parse(asset.content.data) : asset.content?.data;
+      if (d?.status) status = d.status;
+    } catch {}
+    const key = `${asset.position.x},${asset.position.y}`;
+    const hasAgent = stationOccupants.has(key);
+    if (status === 'pending') {
+      const pulse = 0.2 + 0.15 * Math.sin(animTime * 4);
+      ctx.fillStyle = `rgba(255, 200, 50, ${pulse})`;
+      ctx.fillRect(px, py, pw, TILE_SIZE);
+    } else if (hasAgent && status === 'idle') {
+      const pulse = 0.15 + 0.1 * Math.sin(animTime * 2);
+      ctx.fillStyle = `rgba(80, 220, 120, ${pulse})`;
+      ctx.fillRect(px, py, pw, TILE_SIZE);
     }
     return;
   }
@@ -1033,8 +1064,12 @@ async function handleCanvasClick(e) {
     return;
   }
 
-  // Determine what type of info to show
-  if (asset.trigger) {
+  // Determine what type of info to show (reception before trigger — reception has trigger: "manual")
+  if (asset.reception) {
+    showReception(asset);
+  } else if (asset.task) {
+    showTask(asset);
+  } else if (asset.trigger) {
     showSignalInfo(asset);
   } else if (asset.logger || asset.name?.toLowerCase().includes('log')) {
     await showActivityLog(asset);
@@ -1145,6 +1180,386 @@ function showInboxMessages(asset) {
 
     box.appendChild(form);
   });
+}
+
+// --- Reception station ---
+
+let openReceptionStation = null;
+
+function sanitizeHTML(html) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, 'text/html');
+  const allowed = new Set(['P','BR','H1','H2','H3','H4','H5','H6','UL','OL','LI',
+    'STRONG','EM','B','I','A','IMG','CODE','PRE','BLOCKQUOTE','TABLE','TR','TH','TD',
+    'SPAN','DIV','HR','THEAD','TBODY']);
+  const allowedAttrs = { A: ['href'], IMG: ['src', 'alt'] };
+
+  function walk(node) {
+    for (const child of [...node.childNodes]) {
+      if (child.nodeType === 1) { // element
+        if (!allowed.has(child.tagName)) {
+          // Replace with text content
+          child.replaceWith(document.createTextNode(child.textContent));
+          continue;
+        }
+        // Strip disallowed attributes
+        const keep = allowedAttrs[child.tagName] || [];
+        for (const attr of [...child.attributes]) {
+          if (!keep.includes(attr.name)) {
+            child.removeAttribute(attr.name);
+          } else if ((attr.name === 'href' || attr.name === 'src') && attr.value.trim().toLowerCase().startsWith('javascript:')) {
+            child.removeAttribute(attr.name);
+          }
+        }
+        // Links open in new tab
+        if (child.tagName === 'A') {
+          child.setAttribute('target', '_blank');
+          child.setAttribute('rel', 'noopener noreferrer');
+        }
+        walk(child);
+      }
+    }
+  }
+  walk(doc.body);
+  return doc.body.innerHTML;
+}
+
+function showReception(asset) {
+  const station = asset.station;
+  openReceptionStation = station;
+
+  // Agent presence
+  const here = [];
+  if (asset.position) {
+    const key = `${asset.position.x},${asset.position.y}`;
+    const occupantIds = stationOccupants.get(key);
+    if (occupantIds) {
+      for (const id of occupantIds) {
+        const agent = agents.get(id);
+        if (agent) here.push(agent);
+      }
+    }
+  }
+
+  let state = { status: 'idle', question: null, answer: null };
+  try {
+    if (asset.content?.data) state = JSON.parse(typeof asset.content.data === 'string' ? asset.content.data : JSON.stringify(asset.content.data));
+  } catch {}
+
+  const isOpen = here.length > 0;
+  const agentNames = here.map(a => a.agent_name || a.agent_id).join(', ');
+
+  // Build custom modal
+  const existing = document.getElementById('station-modal');
+  if (existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'station-modal';
+  modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:1000;';
+
+  const box = document.createElement('div');
+  box.style.cssText = 'background:#222240;border:1px solid #3a3a5a;border-radius:6px;padding:16px;max-width:550px;width:90%;max-height:70vh;color:#ccc;font-family:monospace;font-size:13px;overflow-y:auto;';
+
+  const title = document.createElement('div');
+  title.textContent = `\ud83d\udc64 ${station.replace(/_/g, ' ')}`;
+  title.style.cssText = 'font-size:16px;font-weight:bold;margin-bottom:12px;color:#fff;';
+  box.appendChild(title);
+
+  if (!isOpen) {
+    const closed = document.createElement('div');
+    closed.textContent = 'Nobody at the desk right now.';
+    closed.style.cssText = 'color:#888;padding:12px 0;';
+    box.appendChild(closed);
+  } else if (state.status === 'idle') {
+    const info = document.createElement('div');
+    info.textContent = `${agentNames} is here`;
+    info.style.cssText = 'color:#8f8;margin-bottom:12px;';
+    box.appendChild(info);
+
+    const textarea = document.createElement('textarea');
+    textarea.rows = 3;
+    textarea.maxLength = 2000;
+    textarea.placeholder = 'Ask a question...';
+    textarea.style.cssText = 'width:100%;background:#1a1a30;border:1px solid #3a3a5a;border-radius:4px;color:#ccc;padding:8px;font-family:monospace;font-size:12px;resize:vertical;box-sizing:border-box;';
+    box.appendChild(textarea);
+
+    const btn = document.createElement('button');
+    btn.textContent = 'Ask';
+    btn.style.cssText = 'margin-top:8px;background:#3a5a8a;color:#ccc;border:none;border-radius:4px;padding:8px 20px;cursor:pointer;font-family:monospace;font-size:13px;';
+    btn.onclick = async () => {
+      const q = textarea.value.trim();
+      if (!q) return;
+      btn.disabled = true;
+      btn.textContent = 'Sending...';
+      try {
+        const res = await fetch(`${HUB_HTTP_URL}/api/reception/${encodeURIComponent(station)}/ask`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question: q }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ error: res.statusText }));
+          btn.textContent = err.error || 'Error';
+          btn.disabled = false;
+        }
+        // Modal will auto-refresh via WebSocket property_update
+      } catch {
+        btn.textContent = 'Failed';
+        btn.disabled = false;
+      }
+    };
+    textarea.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); btn.click(); }
+    });
+    box.appendChild(btn);
+  } else if (state.status === 'pending') {
+    const info = document.createElement('div');
+    info.textContent = `${agentNames} is thinking...`;
+    info.style.cssText = 'color:#ff8;margin-bottom:8px;';
+    box.appendChild(info);
+
+    const q = document.createElement('div');
+    q.style.cssText = 'background:#1a1a30;border-radius:4px;padding:8px;margin-bottom:8px;color:#aaa;';
+    q.textContent = state.question;
+    box.appendChild(q);
+
+    const spinner = document.createElement('div');
+    spinner.textContent = 'Waiting for answer...';
+    spinner.style.cssText = 'color:#888;font-style:italic;';
+    box.appendChild(spinner);
+  } else if (state.status === 'answered') {
+    const q = document.createElement('div');
+    q.style.cssText = 'background:#1a1a30;border-radius:4px;padding:8px;margin-bottom:12px;color:#aaa;font-size:12px;';
+    q.textContent = state.question;
+    box.appendChild(q);
+
+    const answerEl = document.createElement('div');
+    answerEl.style.cssText = 'line-height:1.6;color:#ddd;';
+    answerEl.innerHTML = sanitizeHTML(state.answer);
+    // Style links/code inside the answer
+    answerEl.querySelectorAll('a').forEach(a => { a.style.color = '#5a8fff'; });
+    answerEl.querySelectorAll('code').forEach(c => { c.style.cssText = 'background:#1a1a30;padding:1px 4px;border-radius:3px;font-size:12px;'; });
+    answerEl.querySelectorAll('pre').forEach(p => { p.style.cssText = 'background:#1a1a30;padding:8px;border-radius:4px;overflow-x:auto;font-size:12px;'; });
+    box.appendChild(answerEl);
+
+    const again = document.createElement('button');
+    again.textContent = 'Ask another question';
+    again.style.cssText = 'margin-top:12px;background:#3a5a8a;color:#ccc;border:none;border-radius:4px;padding:8px 20px;cursor:pointer;font-family:monospace;font-size:13px;';
+    again.onclick = async () => {
+      again.disabled = true;
+      try {
+        await fetch(`${HUB_HTTP_URL}/api/reception/${encodeURIComponent(station)}/clear`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...(CONFIG.apiKey && { Authorization: `Bearer ${CONFIG.apiKey}` }) },
+        });
+        // Will auto-refresh via property_update
+      } catch {}
+    };
+    box.appendChild(again);
+  }
+
+  modal.appendChild(box);
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) { modal.remove(); openReceptionStation = null; }
+  });
+  document.addEventListener('keydown', function esc(e) {
+    if (e.key === 'Escape') { modal.remove(); openReceptionStation = null; document.removeEventListener('keydown', esc); }
+  });
+  document.body.appendChild(modal);
+}
+
+// --- Task station ---
+
+let openTaskStation = null;
+
+function showTask(asset) {
+  const station = asset.station;
+  openTaskStation = station;
+
+  // Agent presence
+  const here = [];
+  if (asset.position) {
+    const key = `${asset.position.x},${asset.position.y}`;
+    const occupantIds = stationOccupants.get(key);
+    if (occupantIds) {
+      for (const id of occupantIds) {
+        const agent = agents.get(id);
+        if (agent) here.push(agent);
+      }
+    }
+  }
+
+  let state = { status: 'idle', result: null };
+  try {
+    if (asset.content?.data) state = JSON.parse(typeof asset.content.data === 'string' ? asset.content.data : JSON.stringify(asset.content.data));
+  } catch {}
+
+  const isOpen = here.length > 0;
+  const agentNames = here.map(a => a.agent_name || a.agent_id).join(', ');
+
+  const existing = document.getElementById('station-modal');
+  if (existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'station-modal';
+  modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:1000;';
+
+  const box = document.createElement('div');
+  box.style.cssText = 'background:#222240;border:1px solid #3a3a5a;border-radius:6px;padding:16px;max-width:550px;width:90%;max-height:70vh;color:#ccc;font-family:monospace;font-size:13px;overflow-y:auto;';
+
+  const title = document.createElement('div');
+  title.textContent = `\u2699 ${station.replace(/_/g, ' ')}`;
+  title.style.cssText = 'font-size:16px;font-weight:bold;margin-bottom:12px;color:#fff;';
+  box.appendChild(title);
+
+  const isAuthed = !!CONFIG.apiKey;
+  const canRun = asset.task_public !== false || isAuthed;
+
+  // Task instructions — editable for authed users
+  if (asset.instructions || isAuthed) {
+    const descWrap = document.createElement('div');
+    descWrap.style.cssText = 'margin-bottom:12px;';
+
+    const desc = document.createElement('div');
+    desc.textContent = asset.instructions || '(no instructions)';
+    desc.style.cssText = 'color:#aaa;font-size:12px;line-height:1.5;';
+    descWrap.appendChild(desc);
+
+    if (isAuthed) {
+      const editBtn = document.createElement('button');
+      editBtn.textContent = 'Edit';
+      editBtn.style.cssText = 'margin-top:6px;background:transparent;color:#5a8fff;border:1px solid #3a3a5a;border-radius:3px;padding:3px 10px;cursor:pointer;font-family:monospace;font-size:11px;';
+      editBtn.onclick = () => {
+        desc.style.display = 'none';
+        editBtn.style.display = 'none';
+        const textarea = document.createElement('textarea');
+        textarea.value = asset.instructions || '';
+        textarea.rows = 4;
+        textarea.style.cssText = 'width:100%;background:#1a1a30;border:1px solid #3a3a5a;border-radius:4px;color:#ccc;padding:8px;font-family:monospace;font-size:12px;resize:vertical;box-sizing:border-box;';
+        descWrap.appendChild(textarea);
+        const saveBtn = document.createElement('button');
+        saveBtn.textContent = 'Save';
+        saveBtn.style.cssText = 'margin-top:6px;background:#3a5a8a;color:#ccc;border:none;border-radius:4px;padding:6px 16px;cursor:pointer;font-family:monospace;font-size:12px;';
+        saveBtn.onclick = async () => {
+          saveBtn.disabled = true;
+          saveBtn.textContent = 'Saving...';
+          try {
+            const res = await fetch(`${HUB_HTTP_URL}/api/task/${encodeURIComponent(station)}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${CONFIG.apiKey}` },
+              body: JSON.stringify({ instructions: textarea.value }),
+            });
+            if (!res.ok) { saveBtn.textContent = 'Failed'; saveBtn.disabled = false; }
+          } catch { saveBtn.textContent = 'Failed'; saveBtn.disabled = false; }
+        };
+        descWrap.appendChild(saveBtn);
+        textarea.focus();
+      };
+      descWrap.appendChild(editBtn);
+    }
+    box.appendChild(descWrap);
+  }
+
+  if (!isOpen) {
+    const closed = document.createElement('div');
+    closed.textContent = 'No agent on duty \u2014 task will run when one arrives.';
+    closed.style.cssText = 'color:#888;padding:12px 0;';
+    box.appendChild(closed);
+  } else if (state.status === 'idle') {
+    const info = document.createElement('div');
+    info.textContent = `${agentNames} on duty`;
+    info.style.cssText = 'color:#8f8;margin-bottom:12px;';
+    box.appendChild(info);
+
+    if (canRun) {
+      const promptInput = document.createElement('textarea');
+      promptInput.rows = 2;
+      promptInput.maxLength = 2000;
+      promptInput.placeholder = 'Add a prompt (optional)...';
+      promptInput.style.cssText = 'width:100%;background:#1a1a30;border:1px solid #3a3a5a;border-radius:4px;color:#ccc;padding:8px;font-family:monospace;font-size:12px;resize:vertical;box-sizing:border-box;margin-bottom:8px;';
+      box.appendChild(promptInput);
+
+      const btn = document.createElement('button');
+      btn.textContent = 'Run';
+      btn.style.cssText = 'background:#3a5a8a;color:#ccc;border:none;border-radius:4px;padding:8px 20px;cursor:pointer;font-family:monospace;font-size:13px;';
+      btn.onclick = async () => {
+        btn.disabled = true;
+        btn.textContent = 'Starting...';
+        try {
+          const headers = { 'Content-Type': 'application/json' };
+          if (CONFIG.apiKey) headers['Authorization'] = `Bearer ${CONFIG.apiKey}`;
+          const body = {};
+          if (promptInput.value.trim()) body.prompt = promptInput.value.trim();
+          const res = await fetch(`${HUB_HTTP_URL}/api/task/${encodeURIComponent(station)}/run`, {
+            method: 'POST', headers, body: JSON.stringify(body),
+          });
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({ error: res.statusText }));
+            btn.textContent = err.error || 'Error';
+            btn.disabled = false;
+          }
+        } catch {
+          btn.textContent = 'Failed';
+          btn.disabled = false;
+        }
+      };
+      box.appendChild(btn);
+    } else {
+      const locked = document.createElement('div');
+      locked.textContent = 'Login required to run this task.';
+      locked.style.cssText = 'color:#888;font-style:italic;';
+      box.appendChild(locked);
+    }
+  } else if (state.status === 'pending') {
+    const info = document.createElement('div');
+    info.textContent = `${agentNames} is working...`;
+    info.style.cssText = 'color:#ff8;margin-bottom:8px;';
+    box.appendChild(info);
+
+    if (state.prompt) {
+      const promptEl = document.createElement('div');
+      promptEl.textContent = `"${state.prompt}"`;
+      promptEl.style.cssText = 'color:#aac;font-style:italic;margin-bottom:8px;';
+      box.appendChild(promptEl);
+    }
+    const spinner = document.createElement('div');
+    spinner.textContent = 'Task in progress...';
+    spinner.style.cssText = 'color:#888;font-style:italic;';
+    box.appendChild(spinner);
+  } else if (state.status === 'done') {
+    const resultEl = document.createElement('div');
+    resultEl.style.cssText = 'line-height:1.6;color:#ddd;margin-bottom:12px;';
+    resultEl.innerHTML = sanitizeHTML(state.result);
+    resultEl.querySelectorAll('a').forEach(a => { a.style.color = '#5a8fff'; });
+    resultEl.querySelectorAll('code').forEach(c => { c.style.cssText = 'background:#1a1a30;padding:1px 4px;border-radius:3px;font-size:12px;'; });
+    resultEl.querySelectorAll('pre').forEach(p => { p.style.cssText = 'background:#1a1a30;padding:8px;border-radius:4px;overflow-x:auto;font-size:12px;'; });
+    box.appendChild(resultEl);
+
+    if (isOpen) {
+      const again = document.createElement('button');
+      again.textContent = 'Run again';
+      again.style.cssText = 'margin-top:8px;background:#3a5a8a;color:#ccc;border:none;border-radius:4px;padding:8px 20px;cursor:pointer;font-family:monospace;font-size:13px;';
+      again.onclick = async () => {
+        again.disabled = true;
+        try {
+          await fetch(`${HUB_HTTP_URL}/api/task/${encodeURIComponent(station)}/clear`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...(CONFIG.apiKey && { Authorization: `Bearer ${CONFIG.apiKey}` }) },
+          });
+        } catch {}
+      };
+      box.appendChild(again);
+    }
+  }
+
+  modal.appendChild(box);
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) { modal.remove(); openTaskStation = null; }
+  });
+  document.addEventListener('keydown', function esc(e) {
+    if (e.key === 'Escape') { modal.remove(); openTaskStation = null; document.removeEventListener('keydown', esc); }
+  });
+  document.body.appendChild(modal);
 }
 
 async function showRemoteBoard(asset) {
