@@ -584,6 +584,7 @@ function drawAssetIndicators(asset, propX, propY) {
 
 function drawTileLayer(tiles, ox, oy) {
   if (!tiles) return;
+  const PAD = 0.5; // overdraw to prevent subpixel gaps
   for (const t of tiles) {
     const img = tilesetImages[t.src];
     if (!img) continue;
@@ -591,7 +592,7 @@ function drawTileLayer(tiles, ox, oy) {
     const ay = t.ay ?? t.ty ?? 0;
     ctx.drawImage(img,
       ax * TILE_SIZE, ay * TILE_SIZE, TILE_SIZE, TILE_SIZE,
-      ox + t.x * TILE_SIZE, oy + t.y * TILE_SIZE, TILE_SIZE, TILE_SIZE
+      ox + t.x * TILE_SIZE - PAD, oy + t.y * TILE_SIZE - PAD, TILE_SIZE + PAD * 2, TILE_SIZE + PAD * 2
     );
   }
 }
