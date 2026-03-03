@@ -793,11 +793,11 @@ canvas.addEventListener("wheel", (e) => {
   camera.zoom = Math.max(0.5, Math.min(6, camera.zoom));
 
   const rect = canvas.getBoundingClientRect();
-  const mx = e.clientX - rect.left;
-  const my = e.clientY - rect.top;
-  const ratio = 1 - camera.zoom / oldZoom;
-  camera.x += (mx / oldZoom - camera.x) * ratio * oldZoom / camera.zoom;
-  camera.y += (my / oldZoom - camera.y) * ratio * oldZoom / camera.zoom;
+  const mx = e.clientX - rect.left - rect.width / 2;
+  const my = e.clientY - rect.top - rect.height / 2;
+  const worldBefore = { x: mx / oldZoom - camera.x, y: my / oldZoom - camera.y };
+  camera.x = mx / camera.zoom - worldBefore.x;
+  camera.y = my / camera.zoom - worldBefore.y;
 }, { passive: false });
 
 // Pinch-to-zoom
