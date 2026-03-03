@@ -298,16 +298,6 @@
 					"approach": "below"
 				},
 				{
-					"src": "office_16x16",
-					"tx": 10,
-					"ty": 4,
-					"w": 2,
-					"h": 2,
-					"label": "Inbox",
-					"station": "inbox",
-					"approach": "below"
-				},
-				{
 					"src": "delivery",
 					"tx": 9,
 					"ty": 9,
@@ -345,15 +335,6 @@
 					"collision": "solid"
 				},
 				{
-					"src": "office_16x16",
-					"tx": 2,
-					"ty": 3,
-					"w": 1,
-					"h": 2,
-					"label": "Wall_Wood3",
-					"collision": "solid"
-				},
-				{
 					"src": "delivery",
 					"tx": 9,
 					"ty": 5,
@@ -369,6 +350,17 @@
 							"dir": "on"
 						}
 					]
+				},
+				{
+					"src": "office_16x16",
+					"tx": 10,
+					"ty": 4,
+					"w": 2,
+					"h": 2,
+					"label": "Inbox",
+					"station": "inbox",
+					"approach": "below",
+					"collision": "solid"
 				}
 			]
 		},
@@ -415,6 +407,48 @@
 					"collision": "solid",
 					"station": "News_Desk",
 					"approach": "below"
+				},
+				{
+					"src": "delivery",
+					"tx": 12,
+					"ty": 1,
+					"w": 4,
+					"h": 3,
+					"label": "Lunatic_Receptionj",
+					"collision": "solid",
+					"reception": true,
+					"trigger": "manual",
+					"station": "Lunatic_Receptionj",
+					"instructions": "You only say hi and try to answer the question like a lunatic",
+					"approach": "below"
+				},
+				{
+					"src": "delivery",
+					"tx": 9,
+					"ty": 5,
+					"w": 2,
+					"h": 3,
+					"label": "Reddit_Spy",
+					"task": true,
+					"trigger": "manual",
+					"station": "Reddit_Spy",
+					"instructions": "Go to reddit and look for y2k posts and bring those links back",
+					"approach": "below"
+				},
+				{
+					"src": "delivery",
+					"tx": 9,
+					"ty": 5,
+					"w": 2,
+					"h": 3,
+					"label": "Task_Table",
+					"station": "Task_Table",
+					"approach": "below",
+					"collision": "solid",
+					"task": true,
+					"trigger": "manual",
+					"task_public": true,
+					"instructions": "Looking for a y2k themed screenshot and deliver it"
 				}
 			]
 		},
