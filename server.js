@@ -1154,11 +1154,15 @@ app.patch("/api/task/:station", requireAuth, stateLimiter, (req, res) => {
   res.json({ ok: true });
 });
 
-// POST /api/task/:station/clear — reset task to idle (requires auth)
-app.post("/api/task/:station/clear", requireAuth, stateLimiter, (req, res) => {
+// POST /api/task/:station/clear — reset task to idle
+app.post("/api/task/:station/clear", stateLimiter, (req, res) => {
   const station = req.params.station;
   const asset = currentProperty?.assets?.find(a => a.station === station && a.task);
   if (!asset) return res.status(404).json({ error: "Task station not found" });
+
+  if (!asset.task_public && API_KEY && req.headers.authorization !== `Bearer ${API_KEY}`) {
+    return res.status(401).json({ error: "This task requires authentication" });
+  }
 
   asset.content = { type: "task", data: JSON.stringify({ status: "idle", result: null }) };
   broadcast({ type: "property_update", property: currentProperty });
