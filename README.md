@@ -165,6 +165,31 @@ cp .env.example .env
 | `ALLOW_SIGNAL_PAYLOADS` | `false` | Allow data payloads in signals |
 | `TRUST_PROXY` | `false` | Set `true` if behind nginx/Cloudflare |
 
+## Custom Properties
+
+The hub ships with a default property, but you can swap it out for your own. Design your layout in the built-in editor at `/editor/`, export the JSON, and use any of these methods:
+
+**Volume mount (easiest):**
+```bash
+docker run -p 4242:4242 -v ./my-property.json:/app/data/property.json:ro zer0liquid/the-agents-hub:latest
+```
+
+**Custom Dockerfile:**
+```dockerfile
+FROM zer0liquid/the-agents-hub:latest
+COPY my-property.json /app/data/property.json
+```
+
+**API push (at runtime):**
+```bash
+curl -X POST http://localhost:4242/api/property \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $API_KEY" \
+  -d @my-property.json
+```
+
+Build your own property, publish your own image, share it with others — go wild.
+
 ## Architecture
 
 ```
