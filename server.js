@@ -1091,17 +1091,13 @@ app.post("/api/task/:station/run", taskLimiter, (req, res) => {
     return res.status(409).json({ error: "Task is already running" });
   }
 
-  const prompt = typeof req.body?.prompt === "string" ? req.body.prompt.slice(0, 2000).trim() : "";
-
   state.status = "pending";
   state.result = null;
-  state.prompt = prompt || null;
   state.startedAt = new Date().toISOString();
   asset.content = { type: "task", data: JSON.stringify(state) };
 
-  // Fire signal with instructions + visitor prompt
+  // Fire signal with instructions
   const payload = { station, instructions: asset.instructions };
-  if (prompt) payload.prompt = prompt;
   broadcast({
     type: "signal", station, trigger: "manual", timestamp: Date.now(),
     payload,

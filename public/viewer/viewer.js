@@ -117,6 +117,8 @@ const imageAssets = new Map();
 const characterSprites = {}; // { charName: { pose: Image } }
 let animTime = 0;
 const signalFlash = new Map(); // station -> Date.now() of last fire
+const bubbleShowUntil = new Map(); // agentId -> timestamp when bubble auto-hides
+const bubblePinned = new Set(); // agentIds with pinned (clicked) bubbles
 
 // Single property state
 let property = null;            // property data (v2 format)
@@ -275,6 +277,8 @@ function connect() {
         agents.delete(msg.agent_id);
         characters.delete(msg.agent_id);
         agentLastSeen.delete(msg.agent_id);
+        bubbleShowUntil.delete(msg.agent_id);
+        bubblePinned.delete(msg.agent_id);
         for (const [, occ] of stationOccupants) occ.delete(msg.agent_id);
         break;
       case "signal":
@@ -400,6 +404,10 @@ function updateAgentPath(agentId, data) {
 }
 
 function handleAgentUpdate(agentId, data) {
+  const prev = agents.get(agentId);
+  if (!prev || prev.detail !== data.detail || prev.state !== data.state) {
+    bubbleShowUntil.set(agentId, Date.now() + 8000);
+  }
   agents.set(agentId, data);
   agentLastSeen.set(agentId, Date.now());
   const spriteName = data.sprite || CHARACTER_NAME;
@@ -673,7 +681,11 @@ function drawCharacter(ch, data) {
     ctx.textAlign = "center";
     ctx.fillText(data.agent_name || "Agent", ch.drawX, drawY - 2);
 
-    if (data.detail) drawBubble(ch.drawX, drawY - 10, data.detail);
+    const showBubble = bubblePinned.has(data.agent_id) || Date.now() < (bubbleShowUntil.get(data.agent_id) || 0);
+    if (data.detail && showBubble) {
+      const bubbleText = bubblePinned.has(data.agent_id) ? `[${data.state || 'idle'}] ${data.detail}` : data.detail;
+      drawBubble(ch.drawX, drawY - 10, bubbleText);
+    }
   } else {
     // Fallback circle
     const sz = TILE_SIZE * scale;
@@ -689,7 +701,11 @@ function drawCharacter(ch, data) {
     ctx.textAlign = "center";
     ctx.fillText(data.agent_name || "Agent", ch.drawX, ch.drawY - sz / 2 - 2);
 
-    if (data.detail) drawBubble(ch.drawX, ch.drawY - sz / 2 - 10, data.detail);
+    const showBubble = bubblePinned.has(data.agent_id) || Date.now() < (bubbleShowUntil.get(data.agent_id) || 0);
+    if (data.detail && showBubble) {
+      const bubbleText = bubblePinned.has(data.agent_id) ? `[${data.state || 'idle'}] ${data.detail}` : data.detail;
+      drawBubble(ch.drawX, ch.drawY - sz / 2 - 10, bubbleText);
+    }
   }
 
   if (isWaiting) {
@@ -1067,6 +1083,20 @@ function showTapRipple(x, y) {
 
 async function handleCanvasClick(e) {
   const world = screenToWorld(e.clientX, e.clientY);
+
+  // Check if clicking on a character (toggle bubble)
+  const hitRadius = TILE_SIZE * 0.8;
+  for (const [id, ch] of characters) {
+    const dx = world.x - ch.drawX;
+    const dy = world.y - ch.drawY;
+    if (dx * dx + dy * dy < hitRadius * hitRadius) {
+      if (bubblePinned.has(id)) bubblePinned.delete(id);
+      else bubblePinned.add(id);
+      showTapRipple(e.clientX, e.clientY);
+      return;
+    }
+  }
+
   const asset = findAssetAt(world.x, world.y);
 
   if (!asset) return;
@@ -1541,13 +1571,6 @@ function showTask(asset) {
     box.appendChild(info);
 
     if (canRun) {
-      const promptInput = document.createElement('textarea');
-      promptInput.rows = 2;
-      promptInput.maxLength = 2000;
-      promptInput.placeholder = 'Add a prompt (optional)...';
-      promptInput.className = 'form-textarea section-mb';
-      box.appendChild(promptInput);
-
       const btn = document.createElement('button');
       btn.textContent = 'Run';
       btn.className = 'btn btn-primary';
@@ -1557,10 +1580,8 @@ function showTask(asset) {
         try {
           const headers = { 'Content-Type': 'application/json' };
           if (CONFIG.apiKey) headers['Authorization'] = `Bearer ${CONFIG.apiKey}`;
-          const body = {};
-          if (promptInput.value.trim()) body.prompt = promptInput.value.trim();
           const res = await fetch(`${HUB_HTTP_URL}/api/task/${encodeURIComponent(station)}/run`, {
-            method: 'POST', headers, body: JSON.stringify(body),
+            method: 'POST', headers, body: JSON.stringify({}),
           });
           if (!res.ok) {
             const err = await res.json().catch(() => ({ error: res.statusText }));
@@ -1585,13 +1606,6 @@ function showTask(asset) {
     info.textContent = `${agentNames} is working...`;
     box.appendChild(info);
 
-    if (state.prompt) {
-      const promptEl = document.createElement('div');
-      promptEl.className = 'text-italic section-mb';
-      promptEl.style.color = '#aac';
-      promptEl.textContent = `"${state.prompt}"`;
-      box.appendChild(promptEl);
-    }
     const spinner = document.createElement('div');
     spinner.className = 'text-muted text-italic';
     spinner.textContent = 'Task in progress...';
