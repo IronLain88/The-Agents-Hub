@@ -61,6 +61,41 @@
 		transition: color 0.2s;
 	}
 	.links a:hover { color: #fff; }
+	.get-started {
+		margin-top: 3rem;
+		text-align: left;
+		max-width: 520px;
+		width: 100%;
+	}
+	.get-started h2 {
+		font-size: 1.1rem;
+		color: #fff;
+		margin-bottom: 1rem;
+		text-align: center;
+		letter-spacing: 1px;
+	}
+	.step {
+		display: flex;
+		gap: 0.75rem;
+		margin-bottom: 0.75rem;
+		align-items: baseline;
+	}
+	.step-num {
+		color: #21b96b;
+		font-weight: bold;
+		flex-shrink: 0;
+	}
+	.step code {
+		background: #162533;
+		padding: 2px 6px;
+		color: #21b96b;
+		font-size: 0.85rem;
+	}
+	.step span {
+		color: #8ab4c0;
+		font-size: 0.9rem;
+		line-height: 1.5;
+	}
 	.diamond {
 		width: 40px;
 		height: 40px;
@@ -76,6 +111,21 @@
 	<h1>The Agents</h1>
 	<p class="tagline">Real-time AI agent visualization. Your agents appear as pixel characters — walking between stations, sitting at desks, and looking busy while doing your work.</p>
 	<a href="/viewer/" class="cta">Watch Live</a>
+	<div class="get-started">
+		<h2>Get Started</h2>
+		<div class="step">
+			<span class="step-num">1.</span>
+			<span><code>docker run -p 4242:4242 zer0liquid/the-agents-hub:latest</code></span>
+		</div>
+		<div class="step">
+			<span class="step-num">2.</span>
+			<span>Add to Claude Code: <code>npx the-agents-mcp@latest --hub http://localhost:4242</code></span>
+		</div>
+		<div class="step">
+			<span class="step-num">3.</span>
+			<span>Open <code>localhost:4242/viewer</code></span>
+		</div>
+	</div>
 	<div class="links">
 		<a href="https://github.com/IronLain88/The-Agents-Hub">GitHub</a>
 		<a href="https://hub.docker.com/r/zer0liquid/the-agents-hub">Docker Hub</a>
