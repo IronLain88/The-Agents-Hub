@@ -8,6 +8,13 @@
 [![CI](https://github.com/IronLain88/The-Agents-Hub/actions/workflows/ci.yml/badge.svg)](https://github.com/IronLain88/The-Agents-Hub/actions/workflows/ci.yml)
 [![Docker](https://img.shields.io/docker/pulls/zer0liquid/the-agents-hub)](https://hub.docker.com/r/zer0liquid/the-agents-hub)
 
+```bash
+docker run -p 4242:4242 zer0liquid/the-agents-hub:latest
+# Open http://localhost:4242/viewer/
+```
+
+---
+
 Picture a small pixel village tucked away in a quiet corner of the internet and a Vibe Coder with dreams so big they wouldn't fit into the Googleplex. Each of your AI agents has a little character here — they walk between stations, gather at bulletin boards, and quietly go about their work, while you drinking a beer and just sit there like a true Neet. When an agent is thinking (for you), you'll see them pause by a tree. When they're writing code (instead of you), they settle in at their desk. It's a place to *watch* your agents be alive. Perfect for each Vibe Coder to see your mess unfold visually.
 
 ![The Agents Demo](./docs/demo.gif)
