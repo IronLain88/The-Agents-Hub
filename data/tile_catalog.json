@@ -335,23 +335,6 @@
 					"collision": "solid"
 				},
 				{
-					"src": "delivery",
-					"tx": 9,
-					"ty": 5,
-					"w": 2,
-					"h": 3,
-					"label": "Searching_Table",
-					"station": "searching",
-					"approach": "on",
-					"approaches": [
-						{
-							"x": 0.5,
-							"y": 1.5,
-							"dir": "on"
-						}
-					]
-				},
-				{
 					"src": "office_16x16",
 					"tx": 10,
 					"ty": 4,
@@ -360,6 +343,25 @@
 					"label": "Inbox",
 					"station": "inbox",
 					"approach": "below",
+					"collision": "solid"
+				},
+				{
+					"src": "delivery",
+					"tx": 9,
+					"ty": 5,
+					"w": 2,
+					"h": 3,
+					"label": "Searching_Table",
+					"station": "searching",
+					"facing": "up",
+					"approach": "on",
+					"approaches": [
+						{
+							"x": 0.5,
+							"y": 1.5,
+							"dir": "on"
+						}
+					],
 					"collision": "solid"
 				}
 			]
@@ -428,27 +430,21 @@
 					"ty": 5,
 					"w": 2,
 					"h": 3,
-					"label": "Reddit_Spy",
-					"task": true,
-					"trigger": "manual",
-					"station": "Reddit_Spy",
-					"instructions": "Go to reddit and look for y2k posts and bring those links back",
-					"approach": "below"
-				},
-				{
-					"src": "delivery",
-					"tx": 9,
-					"ty": 5,
-					"w": 2,
-					"h": 3,
-					"label": "Task_Table",
-					"station": "Task_Table",
-					"approach": "below",
+					"label": "Y2k-Researcher",
+					"station": "Y2k-Researcher",
+					"approach": "on",
+					"approaches": [
+						{
+							"x": 0.5,
+							"y": 2,
+							"dir": "on"
+						}
+					],
 					"collision": "solid",
 					"task": true,
 					"trigger": "manual",
 					"task_public": true,
-					"instructions": "Looking for a y2k themed screenshot and deliver it"
+					"instructions": "Find y2k related content in recent news"
 				}
 			]
 		},
