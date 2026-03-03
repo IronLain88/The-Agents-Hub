@@ -810,7 +810,7 @@ let pointerDownPos = null;
 let hasDragged = false;
 
 canvas.addEventListener("pointerdown", (e) => {
-  pointerDownPos = { x: e.clientX, y: e.clientY };
+  pointerDownPos = { x: e.clientX, y: e.clientY, pointerType: e.pointerType };
   hasDragged = false;
   dragStart = { x: e.clientX, y: e.clientY };
   camStart = { x: camera.x, y: camera.y };
@@ -824,8 +824,9 @@ canvas.addEventListener("pointermove", (e) => {
   if (!pointerDownPos) return;
   const dx = e.clientX - pointerDownPos.x;
   const dy = e.clientY - pointerDownPos.y;
-  // Require 10 pixels of movement before treating as drag
-  if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
+  // Require movement before treating as drag (20px for touch, 10px for mouse)
+  const threshold = pointerDownPos.pointerType === 'touch' ? 20 : 10;
+  if (Math.abs(dx) > threshold || Math.abs(dy) > threshold) {
     dragging = true;
     hasDragged = true;
   }
@@ -1102,8 +1103,9 @@ function showImageLightbox(asset) {
   img.src = `${HUB_HTTP_URL}/assets/images/${asset.sprite.image}`;
   overlay.appendChild(img);
   document.body.appendChild(overlay);
+  const openedAt = Date.now();
   const close = () => overlay.remove();
-  overlay.addEventListener('click', close);
+  overlay.addEventListener('click', () => { if (Date.now() - openedAt > 400) close(); });
   document.addEventListener('keydown', e => e.key === 'Escape' && close(), { once: true });
 }
 
@@ -1394,8 +1396,9 @@ function showReception(asset) {
   }
 
   modal.appendChild(box);
+  const openedAt = Date.now();
   modal.addEventListener('click', (e) => {
-    if (e.target === modal) { modal.remove(); openReceptionStation = null; }
+    if (e.target === modal && Date.now() - openedAt > 400) { modal.remove(); openReceptionStation = null; }
   });
   document.addEventListener('keydown', function esc(e) {
     if (e.key === 'Escape') { modal.remove(); openReceptionStation = null; document.removeEventListener('keydown', esc); }
@@ -1615,26 +1618,25 @@ function showTask(asset) {
     resultEl.innerHTML = sanitizeHTML(state.result);
     box.appendChild(resultEl);
 
-    if (isOpen) {
-      const again = document.createElement('button');
-      again.textContent = 'Run again';
-      again.className = 'btn btn-primary section-mt';
-      again.onclick = async () => {
-        again.disabled = true;
-        try {
-          await fetch(`${HUB_HTTP_URL}/api/task/${encodeURIComponent(station)}/clear`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', ...(CONFIG.apiKey && { Authorization: `Bearer ${CONFIG.apiKey}` }) },
-          });
-        } catch {}
-      };
-      box.appendChild(again);
-    }
+    const clearBtn = document.createElement('button');
+    clearBtn.textContent = isOpen ? 'Run again' : 'Clear results';
+    clearBtn.className = `btn ${isOpen ? 'btn-primary' : 'btn-danger'} section-mt`;
+    clearBtn.onclick = async () => {
+      clearBtn.disabled = true;
+      try {
+        await fetch(`${HUB_HTTP_URL}/api/task/${encodeURIComponent(station)}/clear`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...(CONFIG.apiKey && { Authorization: `Bearer ${CONFIG.apiKey}` }) },
+        });
+      } catch {}
+    };
+    box.appendChild(clearBtn);
   }
 
   modal.appendChild(box);
+  const openedAt = Date.now();
   modal.addEventListener('click', (e) => {
-    if (e.target === modal) { modal.remove(); openTaskStation = null; }
+    if (e.target === modal && Date.now() - openedAt > 400) { modal.remove(); openTaskStation = null; }
   });
   document.addEventListener('keydown', function esc(e) {
     if (e.key === 'Escape') { modal.remove(); openTaskStation = null; document.removeEventListener('keydown', esc); }
@@ -2226,9 +2228,10 @@ function showModal(title, content, scrollable = false, setupInstructions = null,
   modal.appendChild(box);
   document.body.appendChild(modal);
 
-  // Close on click outside or ESC
+  // Close on click outside or ESC (delay to prevent synthetic touch click)
+  const openedAt = Date.now();
   modal.addEventListener('click', (e) => {
-    if (e.target === modal) modal.remove();
+    if (e.target === modal && Date.now() - openedAt > 400) modal.remove();
   });
   document.addEventListener('keydown', function closeOnEsc(e) {
     if (e.key === 'Escape') {
