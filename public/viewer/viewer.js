@@ -32,7 +32,7 @@ if (!CONFIG.apiKey) CONFIG.apiKey = localStorage.getItem("editor_api_key") || ""
     if (CONFIG.apiKey) {
       const clearBtn = document.createElement('span');
       clearBtn.textContent = '\u21bb Clear agents';
-      clearBtn.style.cssText = 'margin-left:12px;font-size:12px;cursor:pointer;color:#888;';
+      clearBtn.className = 'nav-clear-btn';
       clearBtn.title = 'Remove all agents from the viewer';
       clearBtn.onclick = async () => {
         const res = await fetch(`${HUB_HTTP_URL}/api/agents`, {
@@ -43,6 +43,15 @@ if (!CONFIG.apiKey) CONFIG.apiKey = localStorage.getItem("editor_api_key") || ""
       };
       el.after(clearBtn);
     }
+  }
+
+  // Nav drawer toggle
+  const hamburger = document.getElementById('nav-hamburger');
+  const drawer = document.getElementById('nav-drawer');
+  if (hamburger && drawer) {
+    hamburger.onclick = () => drawer.classList.toggle('open');
+    // Close drawer when clicking a link
+    drawer.querySelectorAll('a').forEach(a => a.addEventListener('click', () => drawer.classList.remove('open')));
   }
 }
 const HUB_WS_URL = CONFIG.hubWsUrl || `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}`;
@@ -300,86 +309,30 @@ function handleSignalWithPayload(msg) {
   const time = new Date(msg.timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   const payloadStr = typeof msg.payload === 'string' ? msg.payload : JSON.stringify(msg.payload, null, 2);
 
-  // Create toast notification
   const toast = document.createElement('div');
-  toast.style.cssText = `
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    background: #2a2a48;
-    border: 1px solid #5a8fff;
-    border-radius: 6px;
-    padding: 12px 16px;
-    color: #ccc;
-    font-family: monospace;
-    font-size: 13px;
-    max-width: 400px;
-    z-index: 2000;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-    animation: slideIn 0.3s ease-out;
-  `;
+  toast.className = 'toast';
 
   const title = document.createElement('div');
+  title.className = 'toast-title';
   title.textContent = `🔔 Signal: ${msg.station}`;
-  title.style.cssText = 'font-weight: bold; color: #5a8fff; margin-bottom: 6px;';
 
   const details = document.createElement('div');
-  details.style.cssText = 'font-size: 11px; color: #888; margin-bottom: 6px;';
+  details.className = 'toast-details';
   details.textContent = `${time} • ${msg.trigger}`;
 
   const payloadEl = document.createElement('pre');
+  payloadEl.className = 'toast-payload';
   payloadEl.textContent = payloadStr;
-  payloadEl.style.cssText = `
-    background: #1a1a2e;
-    padding: 8px;
-    border-radius: 3px;
-    margin: 0;
-    white-space: pre-wrap;
-    word-break: break-word;
-    max-height: 200px;
-    overflow-y: auto;
-    font-size: 12px;
-  `;
 
   toast.appendChild(title);
   toast.appendChild(details);
   toast.appendChild(payloadEl);
   document.body.appendChild(toast);
 
-  // Auto-remove after 5 seconds
   setTimeout(() => {
-    toast.style.animation = 'slideOut 0.3s ease-in';
+    toast.style.animation = 'slideOutDown 0.3s ease-in';
     setTimeout(() => toast.remove(), 300);
   }, 5000);
-}
-
-// Add CSS animation for toast
-if (!document.getElementById('signal-toast-styles')) {
-  const style = document.createElement('style');
-  style.id = 'signal-toast-styles';
-  style.textContent = `
-    @keyframes slideIn {
-      from {
-        transform: translateX(400px);
-        opacity: 0;
-      }
-      to {
-        transform: translateX(0);
-        opacity: 1;
-      }
-    }
-    @keyframes slideOut {
-      from {
-        transform: translateX(0);
-        opacity: 1;
-      }
-      to {
-        transform: translateX(400px);
-        opacity: 0;
-      }
-    }
-  `;
-  document.head.appendChild(style);
 }
 
 function updateAgentPath(agentId, data) {
@@ -862,6 +815,9 @@ canvas.addEventListener("pointerdown", (e) => {
   dragStart = { x: e.clientX, y: e.clientY };
   camStart = { x: camera.x, y: camera.y };
   canvas.setPointerCapture(e.pointerId);
+  // Close nav drawer on canvas interaction
+  const drawer = document.getElementById('nav-drawer');
+  if (drawer) drawer.classList.remove('open');
 });
 
 canvas.addEventListener("pointermove", (e) => {
@@ -880,8 +836,6 @@ canvas.addEventListener("pointermove", (e) => {
 
 canvas.addEventListener("pointerup", (e) => {
   if (!hasDragged && pointerDownPos) {
-    // Click detected - check if user clicked on a station
-    console.log('[CLICK] Detected click at', e.clientX, e.clientY);
     handleCanvasClick(e);
   }
   dragging = false;
@@ -1101,16 +1055,23 @@ function findAssetAt(worldX, worldY) {
   return wallHit;
 }
 
+function showTapRipple(x, y) {
+  const ripple = document.createElement('div');
+  ripple.className = 'tap-ripple';
+  ripple.style.left = x + 'px';
+  ripple.style.top = y + 'px';
+  document.body.appendChild(ripple);
+  ripple.addEventListener('animationend', () => ripple.remove());
+}
+
 async function handleCanvasClick(e) {
   const world = screenToWorld(e.clientX, e.clientY);
-  console.log('[CLICK] World coords:', world);
   const asset = findAssetAt(world.x, world.y);
-  console.log('[CLICK] Found asset:', asset);
 
-  if (!asset) {
-    console.log('[CLICK] No asset found at this position');
-    return;
-  }
+  if (!asset) return;
+
+  // Tap feedback
+  showTapRipple(e.clientX, e.clientY);
 
   // Determine what type of info to show (reception before trigger — reception has trigger: "manual")
   if (asset.reception) {
@@ -1136,10 +1097,9 @@ async function handleCanvasClick(e) {
 
 function showImageLightbox(asset) {
   const overlay = document.createElement('div');
-  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);z-index:2000;display:flex;align-items:center;justify-content:center;cursor:pointer;';
+  overlay.className = 'lightbox';
   const img = document.createElement('img');
   img.src = `${HUB_HTTP_URL}/assets/images/${asset.sprite.image}`;
-  img.style.cssText = 'max-width:90vw;max-height:90vh;object-fit:contain;border-radius:4px;box-shadow:0 0 40px rgba(0,0,0,0.5);';
   overlay.appendChild(img);
   document.body.appendChild(overlay);
   const close = () => overlay.remove();
@@ -1167,15 +1127,15 @@ function showInboxMessages(asset) {
 
   showModal('📬 Inbox', lines, messages.length > 0, null, null, null, (box) => {
     const form = document.createElement('div');
-    form.style.cssText = 'display:flex;gap:6px;margin-top:12px;border-top:1px solid #3a3a5a;padding-top:10px;';
+    form.className = 'inline-row';
     const input = document.createElement('input');
     input.type = 'text';
     input.placeholder = 'Send a message...';
     input.maxLength = 2000;
-    input.style.cssText = 'flex:1;background:#1a1a30;border:1px solid #3a3a5a;border-radius:4px;color:#ccc;padding:6px 8px;font-family:monospace;font-size:12px;';
+    input.className = 'form-input';
     const btn = document.createElement('button');
     btn.textContent = 'Send';
-    btn.style.cssText = 'background:#3a5a8a;color:#ccc;border:none;border-radius:4px;padding:6px 12px;cursor:pointer;font-family:monospace;font-size:12px;';
+    btn.className = 'btn btn-primary';
     btn.onclick = async () => {
       const text = input.value.trim();
       if (!text) return;
@@ -1205,7 +1165,7 @@ function showInboxMessages(asset) {
     if (messages.length > 0) {
       const clearBtn = document.createElement('button');
       clearBtn.textContent = 'Clear all';
-      clearBtn.style.cssText = 'background:#5a3a3a;color:#ccc;border:none;border-radius:4px;padding:6px 12px;cursor:pointer;font-family:monospace;font-size:12px;';
+      clearBtn.className = 'btn btn-danger';
       clearBtn.onclick = async () => {
         clearBtn.disabled = true;
         try {
@@ -1303,37 +1263,68 @@ function showReception(asset) {
 
   const modal = document.createElement('div');
   modal.id = 'station-modal';
-  modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:1000;';
+  modal.className = 'modal-backdrop';
 
   const box = document.createElement('div');
-  box.style.cssText = 'background:#222240;border:1px solid #3a3a5a;border-radius:6px;padding:16px;max-width:550px;width:90%;max-height:70vh;color:#ccc;font-family:monospace;font-size:13px;overflow-y:auto;';
+  box.className = 'modal-box scrollable';
 
   const title = document.createElement('div');
+  title.className = 'modal-title';
   title.textContent = `\ud83d\udc64 ${station.replace(/_/g, ' ')}`;
-  title.style.cssText = 'font-size:16px;font-weight:bold;margin-bottom:12px;color:#fff;';
   box.appendChild(title);
+
+  // Copy-paste agent prompt for reception
+  const recPrompt = `Man the "${station}" reception desk. Subscribe to "${station}", then loop: check_events → read_reception("${station}") → answer the question → answer_reception("${station}", "<your HTML answer>") → repeat.`;
+  const recPromptWrap = document.createElement('div');
+  recPromptWrap.className = 'section-mb';
+  const recPromptLabel = document.createElement('div');
+  recPromptLabel.className = 'text-muted';
+  recPromptLabel.style.fontSize = '11px';
+  recPromptLabel.style.marginBottom = '4px';
+  recPromptLabel.textContent = 'Paste this into your agent to man this station:';
+  const recPromptRow = document.createElement('div');
+  recPromptRow.className = 'settings-row';
+  const recPromptCode = document.createElement('code');
+  recPromptCode.className = 'text-info';
+  recPromptCode.style.flex = '1';
+  recPromptCode.style.wordBreak = 'break-word';
+  recPromptCode.textContent = recPrompt;
+  const recCopyBtn = document.createElement('button');
+  recCopyBtn.textContent = 'Copy';
+  recCopyBtn.className = 'btn btn-accent';
+  recCopyBtn.onclick = () => {
+    navigator.clipboard.writeText(recPrompt).then(() => {
+      recCopyBtn.textContent = '✓ Copied';
+      setTimeout(() => recCopyBtn.textContent = 'Copy', 2000);
+    });
+  };
+  recPromptRow.appendChild(recPromptCode);
+  recPromptRow.appendChild(recCopyBtn);
+  recPromptWrap.appendChild(recPromptLabel);
+  recPromptWrap.appendChild(recPromptRow);
+  box.appendChild(recPromptWrap);
 
   if (!isOpen) {
     const closed = document.createElement('div');
+    closed.className = 'text-muted section-pad';
     closed.textContent = 'Nobody at the desk right now.';
-    closed.style.cssText = 'color:#888;padding:12px 0;';
     box.appendChild(closed);
   } else if (state.status === 'idle') {
     const info = document.createElement('div');
+    info.className = 'text-green section-mb';
     info.textContent = `${agentNames} is here`;
-    info.style.cssText = 'color:#8f8;margin-bottom:12px;';
     box.appendChild(info);
 
     const textarea = document.createElement('textarea');
     textarea.rows = 3;
     textarea.maxLength = 2000;
     textarea.placeholder = 'Ask a question...';
-    textarea.style.cssText = 'width:100%;background:#1a1a30;border:1px solid #3a3a5a;border-radius:4px;color:#ccc;padding:8px;font-family:monospace;font-size:12px;resize:vertical;box-sizing:border-box;';
+    textarea.className = 'form-textarea';
     box.appendChild(textarea);
 
     const btn = document.createElement('button');
     btn.textContent = 'Ask';
-    btn.style.cssText = 'margin-top:8px;background:#3a5a8a;color:#ccc;border:none;border-radius:4px;padding:8px 20px;cursor:pointer;font-family:monospace;font-size:13px;';
+    btn.className = 'btn btn-primary section-mt';
     btn.onclick = async () => {
       const q = textarea.value.trim();
       if (!q) return;
@@ -1362,37 +1353,33 @@ function showReception(asset) {
     box.appendChild(btn);
   } else if (state.status === 'pending') {
     const info = document.createElement('div');
+    info.className = 'text-yellow section-mb';
     info.textContent = `${agentNames} is thinking...`;
-    info.style.cssText = 'color:#ff8;margin-bottom:8px;';
     box.appendChild(info);
 
     const q = document.createElement('div');
-    q.style.cssText = 'background:#1a1a30;border-radius:4px;padding:8px;margin-bottom:8px;color:#aaa;';
+    q.className = 'code-block';
     q.textContent = state.question;
     box.appendChild(q);
 
     const spinner = document.createElement('div');
+    spinner.className = 'text-muted text-italic';
     spinner.textContent = 'Waiting for answer...';
-    spinner.style.cssText = 'color:#888;font-style:italic;';
     box.appendChild(spinner);
   } else if (state.status === 'answered') {
     const q = document.createElement('div');
-    q.style.cssText = 'background:#1a1a30;border-radius:4px;padding:8px;margin-bottom:12px;color:#aaa;font-size:12px;';
+    q.className = 'code-block text-info';
     q.textContent = state.question;
     box.appendChild(q);
 
     const answerEl = document.createElement('div');
-    answerEl.style.cssText = 'line-height:1.6;color:#ddd;';
+    answerEl.className = 'rich-content';
     answerEl.innerHTML = sanitizeHTML(state.answer);
-    // Style links/code inside the answer
-    answerEl.querySelectorAll('a').forEach(a => { a.style.color = '#5a8fff'; });
-    answerEl.querySelectorAll('code').forEach(c => { c.style.cssText = 'background:#1a1a30;padding:1px 4px;border-radius:3px;font-size:12px;'; });
-    answerEl.querySelectorAll('pre').forEach(p => { p.style.cssText = 'background:#1a1a30;padding:8px;border-radius:4px;overflow-x:auto;font-size:12px;'; });
     box.appendChild(answerEl);
 
     const again = document.createElement('button');
     again.textContent = 'Ask another question';
-    again.style.cssText = 'margin-top:12px;background:#3a5a8a;color:#ccc;border:none;border-radius:4px;padding:8px 20px;cursor:pointer;font-family:monospace;font-size:13px;';
+    again.className = 'btn btn-primary section-mt';
     again.onclick = async () => {
       again.disabled = true;
       try {
@@ -1450,14 +1437,14 @@ function showTask(asset) {
 
   const modal = document.createElement('div');
   modal.id = 'station-modal';
-  modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:1000;';
+  modal.className = 'modal-backdrop';
 
   const box = document.createElement('div');
-  box.style.cssText = 'background:#222240;border:1px solid #3a3a5a;border-radius:6px;padding:16px;max-width:550px;width:90%;max-height:70vh;color:#ccc;font-family:monospace;font-size:13px;overflow-y:auto;';
+  box.className = 'modal-box scrollable';
 
   const title = document.createElement('div');
+  title.className = 'modal-title';
   title.textContent = `\u2699 ${station.replace(/_/g, ' ')}`;
-  title.style.cssText = 'font-size:16px;font-weight:bold;margin-bottom:12px;color:#fff;';
   box.appendChild(title);
 
   const isAuthed = !!CONFIG.apiKey;
@@ -1466,28 +1453,28 @@ function showTask(asset) {
   // Task instructions — editable for authed users
   if (asset.instructions || isAuthed) {
     const descWrap = document.createElement('div');
-    descWrap.style.cssText = 'margin-bottom:12px;';
+    descWrap.className = 'section-mb';
 
     const desc = document.createElement('div');
+    desc.className = 'text-info';
     desc.textContent = asset.instructions || '(no instructions)';
-    desc.style.cssText = 'color:#aaa;font-size:12px;line-height:1.5;';
     descWrap.appendChild(desc);
 
     if (isAuthed) {
       const editBtn = document.createElement('button');
       editBtn.textContent = 'Edit';
-      editBtn.style.cssText = 'margin-top:6px;background:transparent;color:#5a8fff;border:1px solid #3a3a5a;border-radius:3px;padding:3px 10px;cursor:pointer;font-family:monospace;font-size:11px;';
+      editBtn.className = 'btn btn-ghost section-mt';
       editBtn.onclick = () => {
         desc.style.display = 'none';
         editBtn.style.display = 'none';
         const textarea = document.createElement('textarea');
         textarea.value = asset.instructions || '';
         textarea.rows = 4;
-        textarea.style.cssText = 'width:100%;background:#1a1a30;border:1px solid #3a3a5a;border-radius:4px;color:#ccc;padding:8px;font-family:monospace;font-size:12px;resize:vertical;box-sizing:border-box;';
+        textarea.className = 'form-textarea';
         descWrap.appendChild(textarea);
         const saveBtn = document.createElement('button');
         saveBtn.textContent = 'Save';
-        saveBtn.style.cssText = 'margin-top:6px;background:#3a5a8a;color:#ccc;border:none;border-radius:4px;padding:6px 16px;cursor:pointer;font-family:monospace;font-size:12px;';
+        saveBtn.className = 'btn btn-primary section-mt';
         saveBtn.onclick = async () => {
           saveBtn.disabled = true;
           saveBtn.textContent = 'Saving...';
@@ -1508,15 +1495,46 @@ function showTask(asset) {
     box.appendChild(descWrap);
   }
 
+  // Copy-paste agent prompt
+  const agentPrompt = `Work on the "${station}" task station. Call work_task("${station}") and handle visitor requests in a loop.`;
+  const promptWrap = document.createElement('div');
+  promptWrap.className = 'section-mb';
+  const promptLabel = document.createElement('div');
+  promptLabel.className = 'text-muted';
+  promptLabel.style.fontSize = '11px';
+  promptLabel.style.marginBottom = '4px';
+  promptLabel.textContent = 'Paste this into your agent to man this station:';
+  const promptRow = document.createElement('div');
+  promptRow.className = 'settings-row';
+  const promptCode = document.createElement('code');
+  promptCode.className = 'text-info';
+  promptCode.style.flex = '1';
+  promptCode.style.wordBreak = 'break-word';
+  promptCode.textContent = agentPrompt;
+  const copyBtn = document.createElement('button');
+  copyBtn.textContent = 'Copy';
+  copyBtn.className = 'btn btn-accent';
+  copyBtn.onclick = () => {
+    navigator.clipboard.writeText(agentPrompt).then(() => {
+      copyBtn.textContent = '✓ Copied';
+      setTimeout(() => copyBtn.textContent = 'Copy', 2000);
+    });
+  };
+  promptRow.appendChild(promptCode);
+  promptRow.appendChild(copyBtn);
+  promptWrap.appendChild(promptLabel);
+  promptWrap.appendChild(promptRow);
+  box.appendChild(promptWrap);
+
   if (!isOpen) {
     const closed = document.createElement('div');
+    closed.className = 'text-muted section-pad';
     closed.textContent = 'No agent on duty \u2014 task will run when one arrives.';
-    closed.style.cssText = 'color:#888;padding:12px 0;';
     box.appendChild(closed);
   } else if (state.status === 'idle') {
     const info = document.createElement('div');
+    info.className = 'text-green section-mb';
     info.textContent = `${agentNames} on duty`;
-    info.style.cssText = 'color:#8f8;margin-bottom:12px;';
     box.appendChild(info);
 
     if (canRun) {
@@ -1524,12 +1542,12 @@ function showTask(asset) {
       promptInput.rows = 2;
       promptInput.maxLength = 2000;
       promptInput.placeholder = 'Add a prompt (optional)...';
-      promptInput.style.cssText = 'width:100%;background:#1a1a30;border:1px solid #3a3a5a;border-radius:4px;color:#ccc;padding:8px;font-family:monospace;font-size:12px;resize:vertical;box-sizing:border-box;margin-bottom:8px;';
+      promptInput.className = 'form-textarea section-mb';
       box.appendChild(promptInput);
 
       const btn = document.createElement('button');
       btn.textContent = 'Run';
-      btn.style.cssText = 'background:#3a5a8a;color:#ccc;border:none;border-radius:4px;padding:8px 20px;cursor:pointer;font-family:monospace;font-size:13px;';
+      btn.className = 'btn btn-primary';
       btn.onclick = async () => {
         btn.disabled = true;
         btn.textContent = 'Starting...';
@@ -1554,31 +1572,32 @@ function showTask(asset) {
       box.appendChild(btn);
     } else {
       const locked = document.createElement('div');
+      locked.className = 'text-muted text-italic';
       locked.textContent = 'Login required to run this task.';
-      locked.style.cssText = 'color:#888;font-style:italic;';
       box.appendChild(locked);
     }
   } else if (state.status === 'pending') {
     const info = document.createElement('div');
+    info.className = 'text-yellow section-mb';
     info.textContent = `${agentNames} is working...`;
-    info.style.cssText = 'color:#ff8;margin-bottom:8px;';
     box.appendChild(info);
 
     if (state.prompt) {
       const promptEl = document.createElement('div');
+      promptEl.className = 'text-italic section-mb';
+      promptEl.style.color = '#aac';
       promptEl.textContent = `"${state.prompt}"`;
-      promptEl.style.cssText = 'color:#aac;font-style:italic;margin-bottom:8px;';
       box.appendChild(promptEl);
     }
     const spinner = document.createElement('div');
+    spinner.className = 'text-muted text-italic';
     spinner.textContent = 'Task in progress...';
-    spinner.style.cssText = 'color:#888;font-style:italic;';
     box.appendChild(spinner);
 
     if (CONFIG.apiKey) {
       const cancel = document.createElement('button');
       cancel.textContent = 'Cancel';
-      cancel.style.cssText = 'margin-top:8px;background:#5a3a3a;color:#ccc;border:none;border-radius:4px;padding:6px 16px;cursor:pointer;font-family:monospace;font-size:12px;';
+      cancel.className = 'btn btn-danger section-mt';
       cancel.onclick = async () => {
         cancel.disabled = true;
         try {
@@ -1592,17 +1611,14 @@ function showTask(asset) {
     }
   } else if (state.status === 'done') {
     const resultEl = document.createElement('div');
-    resultEl.style.cssText = 'line-height:1.6;color:#ddd;margin-bottom:12px;';
+    resultEl.className = 'rich-content section-mb';
     resultEl.innerHTML = sanitizeHTML(state.result);
-    resultEl.querySelectorAll('a').forEach(a => { a.style.color = '#5a8fff'; });
-    resultEl.querySelectorAll('code').forEach(c => { c.style.cssText = 'background:#1a1a30;padding:1px 4px;border-radius:3px;font-size:12px;'; });
-    resultEl.querySelectorAll('pre').forEach(p => { p.style.cssText = 'background:#1a1a30;padding:8px;border-radius:4px;overflow-x:auto;font-size:12px;'; });
     box.appendChild(resultEl);
 
     if (isOpen) {
       const again = document.createElement('button');
       again.textContent = 'Run again';
-      again.style.cssText = 'margin-top:8px;background:#3a5a8a;color:#ccc;border:none;border-radius:4px;padding:8px 20px;cursor:pointer;font-family:monospace;font-size:13px;';
+      again.className = 'btn btn-primary section-mt';
       again.onclick = async () => {
         again.disabled = true;
         try {
@@ -1775,54 +1791,28 @@ function showSignalInfo(asset) {
 function showPayloadWarning() {
   return new Promise((resolve) => {
     const warningModal = document.createElement('div');
-    warningModal.style.cssText = `
-      position: fixed;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(0, 0, 0, 0.8);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 2000;
-    `;
+    warningModal.className = 'modal-backdrop z-high';
 
     const warningBox = document.createElement('div');
-    warningBox.style.cssText = `
-      background: #2a2240;
-      border: 2px solid #d04040;
-      border-radius: 6px;
-      padding: 20px;
-      max-width: 500px;
-      color: #ccc;
-      font-family: monospace;
-      font-size: 13px;
-    `;
+    warningBox.className = 'modal-box warning';
+    warningBox.style.padding = '20px';
 
     const warningTitle = document.createElement('div');
+    warningTitle.className = 'modal-title warning';
     warningTitle.textContent = '⚠️ Security Warning';
-    warningTitle.style.cssText = `
-      font-size: 18px;
-      font-weight: bold;
-      margin-bottom: 16px;
-      color: #ff6060;
-    `;
 
     const warningText = document.createElement('div');
+    warningText.className = 'warning-text';
     warningText.innerHTML = `
-      <p style="margin: 0 0 12px 0; line-height: 1.6;">
-        <strong>Enabling payloads allows external data to be sent to AI agents.</strong>
-      </p>
-      <p style="margin: 0 0 12px 0; line-height: 1.6;">
-        <strong style="color: #ff8080;">⚠ Risks:</strong>
-      </p>
-      <ul style="margin: 0 0 12px 0; padding-left: 20px; line-height: 1.6;">
+      <p><strong>Enabling payloads allows external data to be sent to AI agents.</strong></p>
+      <p><strong class="risk">⚠ Risks:</strong></p>
+      <ul>
         <li>Prompt injection attacks</li>
         <li>Malicious instructions in payloads</li>
         <li>Unauthorized agent actions</li>
       </ul>
-      <p style="margin: 0 0 16px 0; line-height: 1.6;">
-        <strong style="color: #60d060;">✓ Only enable if:</strong>
-      </p>
-      <ul style="margin: 0 0 16px 0; padding-left: 20px; line-height: 1.6;">
+      <p><strong class="safe">✓ Only enable if:</strong></p>
+      <ul>
         <li>You control the payload source</li>
         <li>Payloads are validated/sanitized</li>
         <li>This is not a public-facing instance</li>
@@ -1830,22 +1820,11 @@ function showPayloadWarning() {
     `;
 
     const buttonRow = document.createElement('div');
-    buttonRow.style.cssText = 'display: flex; gap: 8px; justify-content: flex-end;';
+    buttonRow.className = 'btn-row';
 
     const cancelBtn = document.createElement('button');
     cancelBtn.textContent = 'Cancel';
-    cancelBtn.style.cssText = `
-      padding: 8px 16px;
-      background: #3a3a5a;
-      border: none;
-      border-radius: 3px;
-      color: #ccc;
-      cursor: pointer;
-      font-family: monospace;
-      font-size: 13px;
-    `;
-    cancelBtn.onmouseover = () => cancelBtn.style.background = '#4a4a6a';
-    cancelBtn.onmouseout = () => cancelBtn.style.background = '#3a3a5a';
+    cancelBtn.className = 'btn btn-muted';
     cancelBtn.onclick = () => {
       warningModal.remove();
       resolve(false);
@@ -1853,19 +1832,7 @@ function showPayloadWarning() {
 
     const confirmBtn = document.createElement('button');
     confirmBtn.textContent = 'I Understand, Enable Payload';
-    confirmBtn.style.cssText = `
-      padding: 8px 16px;
-      background: #d04040;
-      border: none;
-      border-radius: 3px;
-      color: #fff;
-      cursor: pointer;
-      font-family: monospace;
-      font-size: 13px;
-      font-weight: bold;
-    `;
-    confirmBtn.onmouseover = () => confirmBtn.style.background = '#e05050';
-    confirmBtn.onmouseout = () => confirmBtn.style.background = '#d04040';
+    confirmBtn.className = 'btn btn-danger-bold';
     confirmBtn.onclick = () => {
       warningModal.remove();
       resolve(true);
@@ -1880,7 +1847,6 @@ function showPayloadWarning() {
     warningModal.appendChild(warningBox);
     document.body.appendChild(warningModal);
 
-    // Close on ESC key
     const escHandler = (e) => {
       if (e.key === 'Escape') {
         warningModal.remove();
@@ -1929,46 +1895,18 @@ function showModal(title, content, scrollable = false, setupInstructions = null,
 
   const modal = document.createElement('div');
   modal.id = 'station-modal';
-  modal.style.cssText = `
-    position: fixed;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background: rgba(0, 0, 0, 0.7);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-  `;
+  modal.className = 'modal-backdrop';
 
   const box = document.createElement('div');
-  box.style.cssText = `
-    background: #222240;
-    border: 1px solid #3a3a5a;
-    border-radius: 6px;
-    padding: 16px;
-    max-width: 500px;
-    max-height: 70vh;
-    color: #ccc;
-    font-family: monospace;
-    font-size: 13px;
-    ${scrollable ? 'overflow-y: auto;' : ''}
-  `;
+  box.className = 'modal-box' + (scrollable ? ' scrollable' : '');
 
   const titleEl = document.createElement('div');
+  titleEl.className = 'modal-title';
   titleEl.textContent = title;
-  titleEl.style.cssText = `
-    font-size: 16px;
-    font-weight: bold;
-    margin-bottom: 12px;
-    color: #fff;
-  `;
 
   const contentEl = document.createElement('pre');
+  contentEl.className = 'modal-content';
   contentEl.textContent = content;
-  contentEl.style.cssText = `
-    white-space: pre-wrap;
-    margin: 0;
-    line-height: 1.5;
-  `;
 
   box.appendChild(titleEl);
   box.appendChild(contentEl);
@@ -1976,42 +1914,34 @@ function showModal(title, content, scrollable = false, setupInstructions = null,
   // Add payload toggle for signal assets
   if (signalAsset && signalAsset.trigger) {
     const payloadContainer = document.createElement('div');
-    payloadContainer.style.cssText = `
-      margin-top: 12px;
-      padding: 8px;
-      background: #2a2a48;
-      border-radius: 4px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    `;
+    payloadContainer.className = 'settings-row';
 
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
     checkbox.id = 'payload-checkbox';
     checkbox.checked = signalAsset.allow_payload === true;
-    checkbox.style.cssText = 'width: 16px; height: 16px; cursor: pointer;';
+    checkbox.className = 'form-checkbox';
 
     const label = document.createElement('label');
     label.htmlFor = 'payload-checkbox';
+    label.className = 'text-label';
     label.textContent = 'Allow payload';
-    label.style.cssText = 'color: #ccc; cursor: pointer; user-select: none;';
 
     const statusMsg = document.createElement('span');
-    statusMsg.style.cssText = 'color: #888; font-size: 11px; margin-left: auto;';
+    statusMsg.className = 'text-status';
 
     // Payload editor (shown when checkbox is checked)
     const payloadEditorContainer = document.createElement('div');
-    payloadEditorContainer.style.cssText = `
-      margin-top: 8px;
-      display: ${signalAsset.allow_payload ? 'block' : 'none'};
-    `;
+    payloadEditorContainer.className = 'section-mt';
+    payloadEditorContainer.style.display = signalAsset.allow_payload ? 'block' : 'none';
 
     const payloadLabel = document.createElement('div');
+    payloadLabel.className = 'text-muted';
+    payloadLabel.style.fontSize = '11px';
+    payloadLabel.style.marginBottom = '4px';
     payloadLabel.textContent = signalAsset.trigger === 'manual'
       ? 'Default payload (sent with every fire):'
       : 'Payload (JSON or text):';
-    payloadLabel.style.cssText = 'color: #888; font-size: 11px; margin-bottom: 4px;';
 
     const payloadTextarea = document.createElement('textarea');
     payloadTextarea.rows = 4;
@@ -2020,36 +1950,14 @@ function showModal(title, content, scrollable = false, setupInstructions = null,
     payloadTextarea.value = currentPayload !== undefined
       ? (typeof currentPayload === 'string' ? currentPayload : JSON.stringify(currentPayload, null, 2))
       : '';
-    payloadTextarea.style.cssText = `
-      width: 100%;
-      padding: 6px;
-      background: #1a1a2e;
-      border: 1px solid #3a3a5a;
-      border-radius: 3px;
-      color: #ccc;
-      font-family: monospace;
-      font-size: 12px;
-      resize: vertical;
-    `;
+    payloadTextarea.className = 'form-textarea';
 
     const payloadSaveBtn = document.createElement('button');
     payloadSaveBtn.textContent = 'Save Payload';
-    payloadSaveBtn.style.cssText = `
-      margin-top: 4px;
-      padding: 4px 12px;
-      background: #5a8fff;
-      border: none;
-      border-radius: 3px;
-      color: #fff;
-      cursor: pointer;
-      font-family: monospace;
-      font-size: 12px;
-    `;
-    payloadSaveBtn.onmouseover = () => payloadSaveBtn.style.background = '#7aa4ff';
-    payloadSaveBtn.onmouseout = () => payloadSaveBtn.style.background = '#5a8fff';
+    payloadSaveBtn.className = 'btn btn-accent section-mt';
 
     const payloadStatusMsg = document.createElement('span');
-    payloadStatusMsg.style.cssText = 'color: #888; font-size: 11px; margin-left: 8px;';
+    payloadStatusMsg.className = 'text-status';
 
     payloadSaveBtn.onclick = async () => {
       try {
@@ -2178,57 +2086,29 @@ function showModal(title, content, scrollable = false, setupInstructions = null,
   // Add editable interval for heartbeat signals
   if (editableInterval) {
     const intervalContainer = document.createElement('div');
-    intervalContainer.style.cssText = `
-      margin-top: 12px;
-      padding: 8px;
-      background: #2a2a48;
-      border-radius: 4px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    `;
+    intervalContainer.className = 'settings-row';
 
     const label = document.createElement('span');
+    label.className = 'text-label';
     label.textContent = 'Interval:';
-    label.style.cssText = 'color: #ccc;';
 
     const input = document.createElement('input');
     input.type = 'number';
     input.min = '1';
     input.value = editableInterval.currentInterval;
-    input.style.cssText = `
-      width: 80px;
-      padding: 4px 8px;
-      background: #1a1a2e;
-      border: 1px solid #3a3a5a;
-      border-radius: 3px;
-      color: #ccc;
-      font-family: monospace;
-      font-size: 13px;
-    `;
+    input.className = 'form-input-sm';
 
     const unit = document.createElement('span');
+    unit.className = 'text-muted';
     unit.textContent = 'seconds';
-    unit.style.cssText = 'color: #888;';
 
     const updateBtn = document.createElement('button');
     updateBtn.textContent = 'Update';
-    updateBtn.style.cssText = `
-      padding: 4px 12px;
-      background: #5a8fff;
-      border: none;
-      border-radius: 3px;
-      color: #fff;
-      cursor: pointer;
-      font-family: monospace;
-      font-size: 12px;
-      margin-left: auto;
-    `;
-    updateBtn.onmouseover = () => updateBtn.style.background = '#7aa4ff';
-    updateBtn.onmouseout = () => updateBtn.style.background = '#5a8fff';
+    updateBtn.className = 'btn btn-accent';
+    updateBtn.style.marginLeft = 'auto';
 
     const statusMsg = document.createElement('span');
-    statusMsg.style.cssText = 'color: #888; font-size: 11px; margin-left: 8px;';
+    statusMsg.className = 'text-status';
 
     updateBtn.onclick = async () => {
       const newInterval = parseInt(input.value);
@@ -2276,34 +2156,14 @@ function showModal(title, content, scrollable = false, setupInstructions = null,
   // Add fire button for manual signals
   if (fireBtn) {
     const fireContainer = document.createElement('div');
-    fireContainer.style.cssText = `
-      margin-top: 12px;
-      padding: 8px;
-      background: #2a2a48;
-      border-radius: 4px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    `;
+    fireContainer.className = 'settings-row';
 
     const fireButton = document.createElement('button');
     fireButton.textContent = '🔥 Fire Signal';
-    fireButton.style.cssText = `
-      padding: 6px 16px;
-      background: #d08040;
-      border: none;
-      border-radius: 3px;
-      color: #fff;
-      cursor: pointer;
-      font-family: monospace;
-      font-size: 13px;
-      font-weight: bold;
-    `;
-    fireButton.onmouseover = () => fireButton.style.background = '#e09050';
-    fireButton.onmouseout = () => fireButton.style.background = '#d08040';
+    fireButton.className = 'btn btn-fire';
 
     const fireStatus = document.createElement('span');
-    fireStatus.style.cssText = 'color: #888; font-size: 11px; margin-left: 8px;';
+    fireStatus.className = 'text-status';
 
     fireButton.onclick = async () => {
       fireButton.disabled = true;
@@ -2339,30 +2199,15 @@ function showModal(title, content, scrollable = false, setupInstructions = null,
   // Add collapsible setup instructions if provided
   if (setupInstructions) {
     const separator = document.createElement('div');
-    separator.style.cssText = `
-      margin: 12px 0 8px 0;
-      border-top: 1px solid #3a3a5a;
-    `;
+    separator.className = 'separator';
 
     const toggleLink = document.createElement('div');
+    toggleLink.className = 'toggle-link';
     toggleLink.textContent = '► Show setup instructions';
-    toggleLink.style.cssText = `
-      margin-top: 8px;
-      color: #5a8fff;
-      cursor: pointer;
-      user-select: none;
-    `;
-    toggleLink.onmouseover = () => toggleLink.style.color = '#7aa4ff';
-    toggleLink.onmouseout = () => toggleLink.style.color = '#5a8fff';
 
     const setupEl = document.createElement('pre');
+    setupEl.className = 'setup-content';
     setupEl.textContent = setupInstructions;
-    setupEl.style.cssText = `
-      white-space: pre-wrap;
-      margin: 8px 0 0 0;
-      line-height: 1.5;
-      display: none;
-    `;
 
     let expanded = false;
     toggleLink.onclick = () => {
@@ -2396,19 +2241,14 @@ function showModal(title, content, scrollable = false, setupInstructions = null,
 function showWelcome() {
   if (localStorage.getItem('the-agents-visited')) return;
   const overlay = document.createElement('div');
-  overlay.style.cssText = `
-    position:fixed;top:0;left:0;right:0;bottom:0;
-    background:rgba(0,0,0,0.75);display:flex;align-items:center;justify-content:center;z-index:3000;
-  `;
+  overlay.className = 'modal-backdrop z-top';
+
   const box = document.createElement('div');
-  box.style.cssText = `
-    background:#222240;border:1px solid #3a3a5a;border-radius:8px;padding:24px 32px;
-    max-width:420px;color:#ccc;font-family:monospace;font-size:14px;line-height:1.7;text-align:center;
-  `;
+  box.className = 'welcome-box';
   box.innerHTML = `
-    <div style="font-size:20px;font-weight:bold;color:#fff;margin-bottom:12px;">Welcome</div>
+    <div class="modal-title" style="font-size:20px;">Welcome</div>
     <div>This is an agent's workspace.<br>Click furniture to see what's happening.<br>Agents walk to stations as they work.</div>
-    <div style="margin-top:16px;color:#666;font-size:12px;">Click anywhere to continue</div>
+    <div class="text-muted section-mt" style="font-size:12px;">Tap anywhere to continue</div>
   `;
   overlay.appendChild(box);
   document.body.appendChild(overlay);

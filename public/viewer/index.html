@@ -9,11 +9,20 @@
 </head>
 <body>
 <nav class="top-nav">
+	<a href="/viewer/" class="nav-brand">The Agents</a>
+	<div class="nav-links">
+		<a href="/viewer/" class="active">Viewer</a>
+		<a href="/editor/">Property Editor</a>
+		<a href="/editor/asset-editor.html">Asset Editor</a>
+	</div>
+	<span id="auth-status" class="nav-auth"></span>
+	<button id="nav-hamburger" class="nav-hamburger" aria-label="Menu">&#9776;</button>
+</nav>
+<div id="nav-drawer" class="nav-drawer">
 	<a href="/viewer/" class="active">Viewer</a>
 	<a href="/editor/">Property Editor</a>
 	<a href="/editor/asset-editor.html">Asset Editor</a>
-	<span id="auth-status" style="margin-left:auto;font-size:12px;cursor:pointer"></span>
-</nav>
+</div>
 <canvas id="village"></canvas>
 <div id="status" class="status disconnected">Connecting...</div>
 <script type="module">

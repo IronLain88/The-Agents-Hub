@@ -698,10 +698,9 @@ app.post("/api/state", requireAuth, stateLimiter, (req, res) => {
   };
   // Dedup: if another agent with the same name+owner already exists under a
   // different ID (e.g. MCP restarted with a new random suffix), remove the stale one.
-  // Only dedup main agents, and only if the existing entry is stale (>30s no activity).
-  // This preserves legitimate parallel instances while cleaning up restarts.
+  // Timeout is high (150s) to avoid evicting legitimate parallel instances.
   if (!parent_agent_id) {
-    const STALE_MS = 30_000;
+    const STALE_MS = 150_000;
     for (const [existingId, existing] of agents) {
       if (existingId !== agent_id
         && existing.agent_name === entry.agent_name
@@ -1317,6 +1316,15 @@ app.get("/api/board/:station/remote", requireBoard, requireRemoteBoard, async (r
   } catch (err) {
     res.status(502).json({ error: IS_PRODUCTION ? "Failed to fetch remote board" : err.message });
   }
+});
+
+// DELETE /api/agents/:id — remove a single agent (requires auth)
+app.delete("/api/agents/:id", requireAuth, (req, res) => {
+  const id = req.params.id;
+  if (!agents.has(id)) return res.status(404).json({ error: "Agent not found" });
+  agents.delete(id);
+  broadcast({ type: "agent_removed", agent_id: id });
+  res.json({ ok: true });
 });
 
 // DELETE /api/agents — clear all agents (requires auth)
