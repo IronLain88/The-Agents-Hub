@@ -7862,6 +7862,38 @@
 				}
 			],
 			"collision": true
+		},
+		{
+			"id": "asset-1772619936086-6tth",
+			"position": {
+				"x": 1,
+				"y": 26
+			},
+			"sprite": {
+				"tileset": "delivery",
+				"tx": 9,
+				"ty": 5,
+				"width": 2,
+				"height": 3
+			},
+			"station": "Openclaw_Task_Pull_Request",
+			"approach": "on",
+			"approaches": [
+				{
+					"x": 0.5,
+					"y": 2,
+					"dir": "on"
+				}
+			],
+			"collision": true,
+			"task": true,
+			"trigger": "manual",
+			"task_public": false,
+			"instructions": "Check The-Agents-Hub for open pull request, review them and merge",
+			"content": {
+				"type": "task",
+				"data": "{\"status\":\"idle\",\"result\":null}"
+			}
 		}
 	],
 	"collision": []

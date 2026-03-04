@@ -445,6 +445,29 @@
 					"trigger": "manual",
 					"task_public": true,
 					"instructions": "Find y2k related content in recent news"
+				},
+				{
+					"src": "delivery",
+					"tx": 9,
+					"ty": 5,
+					"w": 2,
+					"h": 3,
+					"label": "Openclaw_Task_Pull_Request",
+					"station": "Openclaw_Task_Pull_Request",
+					"approach": "on",
+					"approaches": [
+						{
+							"x": 0.5,
+							"y": 2,
+							"dir": "on"
+						}
+					],
+					"collision": "solid",
+					"task": true,
+					"openclaw_task": true,
+					"trigger": "manual",
+					"task_public": false,
+					"instructions": "Check The-Agents-Hub for open pull request, review them and merge"
 				}
 			]
 		},

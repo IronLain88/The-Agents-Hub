@@ -481,7 +481,8 @@ app.post("/api/assets", requireAuth, propertyLimiter, (req, res) => {
     return res.status(404).json({ error: "No property loaded" });
   }
 
-  const { name, tileset, tx, ty, x, y, station, approach, collision, remote_url, remote_station, reception, task, task_public, instructions } = validation.data;
+  const { name, tileset, tx, ty, x, y, station, approach, collision, remote_url, remote_station, reception, task, openclaw_task, task_public, instructions } = validation.data;
+  const isTask = task || openclaw_task;
   const id = `${name.toLowerCase().replace(/\s+/g, "-")}-${Date.now()}`;
   const asset = {
     id,
@@ -495,8 +496,9 @@ app.post("/api/assets", requireAuth, propertyLimiter, (req, res) => {
     ...(remote_station && { remote_station }),
     ...(reception && { reception, trigger: "manual", instructions,
       content: { type: "reception", data: JSON.stringify({ status: "idle", question: null, answer: null }) } }),
-    ...(task && { task, trigger: "manual", instructions, task_public: task_public ?? true,
+    ...(isTask && { task: true, trigger: "manual", instructions, task_public: task_public ?? true,
       content: { type: "task", data: JSON.stringify({ status: "idle", result: null }) } }),
+    ...(openclaw_task && { openclaw_task: true }),
   };
 
   currentProperty.assets.push(asset);
@@ -645,12 +647,15 @@ function buildWelcome() {
   const signals = [];
   const boards = [];
   const tasks = [];
+  const openclawTasks = [];
   let inboxCount = 0;
 
   for (const a of assets) {
     if (!a.station) continue;
     if (a.task) {
-      tasks.push(`${a.station} — ${a.instructions || "(no instructions)"}`);
+      const entry = `${a.station} — ${a.instructions || "(no instructions)"}`;
+      if (a.openclaw_task) openclawTasks.push(entry);
+      else tasks.push(entry);
       continue;
     }
     if (a.trigger) {
@@ -673,7 +678,7 @@ function buildWelcome() {
     others.push({ name: entry.agent_name, state: entry.state });
   }
 
-  return { stations, signals, boards, tasks, inbox: inboxCount, agents: others };
+  return { stations, signals, boards, tasks, openclawTasks, inbox: inboxCount, agents: others };
 }
 
 // POST /api/state — agent reports its state
@@ -1071,6 +1076,30 @@ const taskLimiter = rateLimit({
   message: { error: "Too many task requests, please try again later" },
 });
 
+// Task expiry: reset abandoned tasks back to idle
+const TASK_EXPIRY_MS = 5 * 60 * 1000;
+setInterval(() => {
+  if (!currentProperty?.assets) return;
+  const now = Date.now();
+  let changed = false;
+  for (const asset of currentProperty.assets) {
+    if (!asset.task) continue;
+    let state;
+    try { state = asset.content?.data ? JSON.parse(asset.content.data) : null; } catch { continue; }
+    if (!state || state.status !== "pending") continue;
+    const started = state.startedAt ? new Date(state.startedAt).getTime() : 0;
+    if (now - started > TASK_EXPIRY_MS) {
+      asset.content = { type: "task", data: JSON.stringify({ status: "idle", result: null }) };
+      changed = true;
+      console.log(`[hub] Task "${asset.station}" expired after ${TASK_EXPIRY_MS / 1000}s — reset to idle`);
+    }
+  }
+  if (changed) {
+    broadcast({ type: "property_update", property: currentProperty });
+    savePropertyToDisk().catch(e => console.error("[hub] Failed to save property:", e));
+  }
+}, 60_000);
+
 // POST /api/task/:station/run — visitor triggers a task (public or auth-gated, rate-limited)
 app.post("/api/task/:station/run", taskLimiter, (req, res) => {
   const station = req.params.station;
@@ -1093,6 +1122,7 @@ app.post("/api/task/:station/run", taskLimiter, (req, res) => {
 
   state.status = "pending";
   state.result = null;
+  state.claimedBy = null;
   state.startedAt = new Date().toISOString();
   asset.content = { type: "task", data: JSON.stringify(state) };
 
@@ -1105,6 +1135,33 @@ app.post("/api/task/:station/run", taskLimiter, (req, res) => {
   broadcast({ type: "property_update", property: currentProperty });
   savePropertyToDisk().catch(e => console.error("[hub] Failed to save property:", e));
   res.json({ ok: true });
+});
+
+// POST /api/task/:station/claim — agent claims a pending task (requires auth)
+app.post("/api/task/:station/claim", requireAuth, stateLimiter, (req, res) => {
+  const station = req.params.station;
+  const asset = currentProperty?.assets?.find(a => a.station === station && a.task);
+  if (!asset) return res.status(404).json({ error: "Task station not found" });
+
+  let state = { status: "idle", result: null };
+  try {
+    if (asset.content?.data) state = JSON.parse(asset.content.data);
+  } catch {}
+
+  if (state.status !== "pending") {
+    return res.status(409).json({ error: "No pending task to claim" });
+  }
+  if (state.claimedBy) {
+    return res.status(409).json({ error: `Already claimed by ${state.claimedBy}` });
+  }
+
+  const agentId = req.body?.agent_id || "unknown";
+  state.claimedBy = agentId;
+  asset.content = { type: "task", data: JSON.stringify(state) };
+
+  broadcast({ type: "property_update", property: currentProperty });
+  savePropertyToDisk().catch(e => console.error("[hub] Failed to save property:", e));
+  res.json({ ok: true, instructions: asset.instructions });
 });
 
 // POST /api/task/:station/result — agent posts a result (requires auth)
