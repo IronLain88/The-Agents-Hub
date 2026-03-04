@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { readdir, readFile, writeFile, mkdir } from "fs/promises";
+import { readdir, readFile, writeFile, mkdir, unlink } from "fs/promises";
 import { fileTypeFromBuffer } from "file-type";
 import { formatBreadcrumb, applyBreadcrumb, applyNote } from "../lib/station-log.js";
 import * as schemas from "../lib/validation.js";
@@ -134,6 +134,20 @@ export default function assetRoutes(ctx) {
       await writeFile(`${IMAGES_DIR}/${fname}`, req.body);
       res.json({ ok: true, path: `/assets/images/${fname}` });
     } catch (err) {
+      res.status(500).json({ error: IS_PRODUCTION ? "Internal server error" : err.message });
+    }
+  });
+
+  router.delete("/api/images/:filename", requireAuth, propertyLimiter, async (req, res) => {
+    try {
+      const fname = req.params.filename;
+      if (!/^[a-zA-Z0-9_-]+\.(png|jpe?g|gif|webp)$/i.test(fname)) {
+        return res.status(400).json({ error: "Invalid filename" });
+      }
+      await unlink(`${IMAGES_DIR}/${fname}`);
+      res.json({ ok: true });
+    } catch (err) {
+      if (err.code === "ENOENT") return res.status(404).json({ error: "File not found" });
       res.status(500).json({ error: IS_PRODUCTION ? "Internal server error" : err.message });
     }
   });

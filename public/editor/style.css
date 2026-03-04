@@ -152,6 +152,9 @@ label { font-size: 12px; color: var(--text-dim); }
 .animated-item:hover { background: var(--surface2); }
 .animated-item.selected { background: var(--accent); color: #fff; }
 .animated-item img { width: 32px; height: 32px; image-rendering: pixelated; object-fit: contain; }
+.del-btn { margin-left: auto; opacity: 0; cursor: pointer; font-size: 11px; padding: 0 4px; }
+.animated-item:hover .del-btn { opacity: .6; }
+.del-btn:hover { opacity: 1 !important; color: #e55; }
 
 /* --- Status bar --- */
 .status-bar {

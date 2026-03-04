@@ -333,6 +333,20 @@ function buildImageList() {
 		label.style.fontSize = "11px";
 		item.appendChild(label);
 
+		const del = document.createElement("span");
+		del.textContent = "x";
+		del.className = "del-btn";
+		del.onclick = async (e) => {
+			e.stopPropagation();
+			if (!confirm(`Delete image "${file}"?`)) return;
+			const r = await fetch(`/api/images/${file}`, { method: "DELETE", headers: { "x-api-key": apiKey } });
+			if (!r.ok) return alert("Delete failed");
+			imageFiles = imageFiles.filter(f => f !== file);
+			if (selectedImageFile === file) selectedImageFile = null;
+			buildImageList();
+		};
+		item.appendChild(del);
+
 		item.onclick = () => {
 			selectedImageFile = file;
 			selectedAnimFile = null;
