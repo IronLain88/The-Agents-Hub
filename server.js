@@ -1304,7 +1304,8 @@ function handleInboxPost(req, res) {
   } catch { messages = []; }
 
   const { from, text } = validation.data;
-  messages.push({ from, text, timestamp: new Date().toISOString() });
+  const id = Math.random().toString(36).slice(2, 8);
+  messages.push({ id, from, text, timestamp: new Date().toISOString() });
 
   // Cap at 50 messages
   while (messages.length > 50) messages.shift();
