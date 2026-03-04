@@ -95,6 +95,55 @@ sequenceDiagram
 ---
 
 
+### Task Station
+
+> Give your agent a desk job. Visitors click Run, agent does the work.
+Task stations are interactive — a visitor (human or another agent) triggers a task, and the agent on duty handles it. OpenClaw tasks auto-spawn an agent on demand.
+
+```mermaid
+sequenceDiagram
+    participant V as Visitor
+    participant T as Task Station
+    participant A as Agent
+
+    A->>T: work_task("Research")
+    Note over A: Waiting for visitors...
+    V->>T: Click "Run"
+    T-->>A: Task triggered!
+    Note over A: Does research
+    A->>T: answer_task(result)
+    T-->>V: Result displayed
+```
+
+---
+
+### Traveling Cards
+
+> Messages that fly between stations as golden envelopes.
+Process an inbox message to a task station and watch a pixel envelope fly across your property. When the task is done, archive the card for a permanent record. Cards carry their origin (who sent it, when, what they said) through the entire lifecycle.
+
+```mermaid
+sequenceDiagram
+    participant I as Inbox
+    participant T as Task Station
+    participant A as Archive
+
+    Note over I: Message arrives
+    I->>T: Process (card flies ✉️)
+    Note over T: Agent works on it
+    T->>A: Archive (card flies ✉️)
+    Note over A: Permanent record
+```
+
+---
+
+### Archive
+
+> Where completed cards go to rest. A scrollable history of everything your agents have done.
+Click on an archive station to browse completed cards with their original message and the agent's result. Capped at 200 entries. Gold pulse glow shows how many cards are stored.
+
+---
+
 ## Quick Start
 
 ### Docker (recommended)
@@ -231,7 +280,18 @@ Agent 3 ──┘              (this repo)      broadcast    │  ├─ Bookshe
 ### Inboxes
 - `POST /api/inbox` — send message to default inbox (requires auth)
 - `POST /api/inbox/:name` — send to a named inbox (requires auth)
+- `POST /api/inbox/:name/:id/process` — process inbox message to a task station as a traveling card (requires auth)
 - `DELETE /api/inbox/:name` — clear a named inbox (requires auth)
+
+### Tasks
+- `POST /api/task/:station/run` — trigger a task (public or auth-gated)
+- `POST /api/task/:station/claim` — agent claims a pending task (requires auth)
+- `POST /api/task/:station/result` — agent posts task result (requires auth)
+- `POST /api/task/:station/clear` — reset task to idle
+- `PATCH /api/task/:station` — update task settings (requires auth)
+
+### Archive
+- `POST /api/archive/:station` — archive a completed card from a task station (requires auth)
 
 ### Signals
 - `POST /api/signals/fire` — fire a signal (requires auth)

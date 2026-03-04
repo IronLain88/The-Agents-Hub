@@ -818,6 +818,24 @@ function paintAt(gx, gy) {
 			if (selectedPalette.instructions) asset.instructions = selectedPalette.instructions;
 			asset.content = { type: "task", data: JSON.stringify({ status: "idle", result: null }) };
 		}
+		// Welcome board: only one allowed
+		else if (selectedPalette.welcome) {
+			if (property.assets.some(a => a.welcome)) {
+				alert("Only one welcome board allowed per property.");
+				return;
+			}
+			asset.station = "welcome";
+			asset.welcome = true;
+		}
+		// Archive station
+		else if (selectedPalette.archive) {
+			if (property.assets.some(a => a.archive)) {
+				alert("Only one archive allowed per property.");
+				return;
+			}
+			asset.station = "archive";
+			asset.archive = true;
+		}
 		// Signal assets: prompt for name, copy trigger fields
 		else if (selectedPalette.trigger) {
 			const existing = property.assets.filter(a => a.trigger === selectedPalette.trigger).length;
