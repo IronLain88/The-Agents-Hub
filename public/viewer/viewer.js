@@ -280,15 +280,19 @@ function connect() {
             showTaskToast(asset, preview);
           }
         }
-        // Auto-refresh open reception modal
-        if (openReceptionStation && msg.property?.assets) {
-          const asset = msg.property.assets.find(a => a.station === openReceptionStation && a.reception);
-          if (asset) showReception(asset);
-        }
-        // Auto-refresh open task modal
-        if (openTaskStation && msg.property?.assets) {
-          const asset = msg.property.assets.find(a => a.station === openTaskStation && a.task);
-          if (asset) showTask(asset);
+        // Auto-refresh open modals (skip if user is editing a text field)
+        const modalEl = document.getElementById('station-modal');
+        const isEditing = modalEl && modalEl.contains(document.activeElement) &&
+          (document.activeElement.tagName === 'TEXTAREA' || document.activeElement.tagName === 'INPUT');
+        if (!isEditing) {
+          if (openReceptionStation && msg.property?.assets) {
+            const asset = msg.property.assets.find(a => a.station === openReceptionStation && a.reception);
+            if (asset) showReception(asset);
+          }
+          if (openTaskStation && msg.property?.assets) {
+            const asset = msg.property.assets.find(a => a.station === openTaskStation && a.task);
+            if (asset) showTask(asset);
+          }
         }
         break;
       case "agent_update":
