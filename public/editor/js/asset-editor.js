@@ -248,8 +248,9 @@ document.getElementById("cfg-approach").addEventListener("change", () => {
 document.getElementById("cfg-special").addEventListener("change", () => {
 	const specialValue = document.getElementById("cfg-special").value;
 	document.getElementById("cfg-interval-label").style.display = specialValue === "signal-heartbeat" ? "" : "none";
-	document.getElementById("cfg-instructions-label").style.display = specialValue === "reception" || specialValue === "task" ? "" : "none";
-	document.getElementById("cfg-task-public-label").style.display = specialValue === "task" ? "" : "none";
+	const isTaskType = specialValue === "task" || specialValue === "openclaw-task";
+	document.getElementById("cfg-instructions-label").style.display = specialValue === "reception" || isTaskType ? "" : "none";
+	document.getElementById("cfg-task-public-label").style.display = isTaskType ? "" : "none";
 });
 document.getElementById("cfg-pose").addEventListener("change", renderApproachPreview);
 document.getElementById("cfg-facing").addEventListener("change", renderApproachPreview);
@@ -813,7 +814,8 @@ function buildCatalogItems() {
 			document.getElementById("cfg-label").value = tile.label || "";
 			document.getElementById("cfg-station").value = tile.station || "";
 			// Load special type fields
-			const specialValue = tile.task ? "task"
+			const specialValue = tile.openclaw_task ? "openclaw-task"
+				: tile.task ? "task"
 				: tile.reception ? "reception"
 				: tile.trigger === "manual" ? "signal-manual"
 				: tile.trigger === "heartbeat" ? "signal-heartbeat"
@@ -823,9 +825,10 @@ function buildCatalogItems() {
 			document.getElementById("cfg-interval").value = tile.trigger_interval || 1;
 			document.getElementById("cfg-interval-label").style.display = specialValue === "signal-heartbeat" ? "" : "none";
 			document.getElementById("cfg-instructions").value = tile.instructions || "";
-			document.getElementById("cfg-instructions-label").style.display = specialValue === "reception" || specialValue === "task" ? "" : "none";
+			const isTaskType = specialValue === "task" || specialValue === "openclaw-task";
+			document.getElementById("cfg-instructions-label").style.display = specialValue === "reception" || isTaskType ? "" : "none";
 			document.getElementById("cfg-task-public").checked = tile.task_public !== false;
-			document.getElementById("cfg-task-public-label").style.display = specialValue === "task" ? "" : "none";
+			document.getElementById("cfg-task-public-label").style.display = isTaskType ? "" : "none";
 			document.getElementById("cfg-approach").value = tile.approach || "below";
 			document.getElementById("cfg-pose").value = tile.pose || "idle";
 			document.getElementById("cfg-facing").value = tile.facing || "auto";
@@ -918,8 +921,9 @@ function applyTileMetadata(tile) {
 			tile.station = label || "Help Desk";
 			const instructions = document.getElementById("cfg-instructions").value.trim();
 			if (instructions) tile.instructions = instructions;
-		} else if (specialValue === "task") {
+		} else if (specialValue === "task" || specialValue === "openclaw-task") {
 			tile.task = true;
+			if (specialValue === "openclaw-task") tile.openclaw_task = true;
 			tile.trigger = "manual";
 			tile.station = label || "Task";
 			tile.task_public = document.getElementById("cfg-task-public").checked;

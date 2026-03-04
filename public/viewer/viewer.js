@@ -531,11 +531,18 @@ function drawAssetIndicators(asset, propX, propY) {
     const hasAgent = stationOccupants.has(key);
     if (status === 'pending') {
       const pulse = 0.2 + 0.15 * Math.sin(animTime * 4);
-      ctx.fillStyle = `rgba(255, 200, 50, ${pulse})`;
+      ctx.fillStyle = asset.openclaw_task
+        ? `rgba(80, 180, 255, ${pulse})`
+        : `rgba(255, 200, 50, ${pulse})`;
       ctx.fillRect(px, py, pw, TILE_SIZE);
     } else if (hasAgent && status === 'idle') {
       const pulse = 0.15 + 0.1 * Math.sin(animTime * 2);
       ctx.fillStyle = `rgba(80, 220, 120, ${pulse})`;
+      ctx.fillRect(px, py, pw, TILE_SIZE);
+    } else if (asset.openclaw_task && status === 'idle') {
+      // openclaw_task always shows a subtle ready glow (no agent needed)
+      const pulse = 0.1 + 0.05 * Math.sin(animTime * 2);
+      ctx.fillStyle = `rgba(80, 180, 255, ${pulse})`;
       ctx.fillRect(px, py, pw, TILE_SIZE);
     }
     return;
@@ -1477,7 +1484,7 @@ function showTask(asset) {
 
   const title = document.createElement('div');
   title.className = 'modal-title';
-  title.textContent = `\u2699 ${station.replace(/_/g, ' ')}`;
+  title.textContent = `${asset.openclaw_task ? '\ud83e\udd16' : '\u2699'} ${station.replace(/_/g, ' ')}`;
   box.appendChild(title);
 
   const isAuthed = !!CONFIG.apiKey;
@@ -1528,38 +1535,40 @@ function showTask(asset) {
     box.appendChild(descWrap);
   }
 
-  // Copy-paste agent prompt
-  const agentPrompt = `Work on the "${station}" task station. Call work_task("${station}") and handle visitor requests in a loop.`;
-  const promptWrap = document.createElement('div');
-  promptWrap.className = 'section-mb';
-  const promptLabel = document.createElement('div');
-  promptLabel.className = 'text-muted';
-  promptLabel.style.fontSize = '11px';
-  promptLabel.style.marginBottom = '4px';
-  promptLabel.textContent = 'Paste this into your agent to man this station:';
-  const promptRow = document.createElement('div');
-  promptRow.className = 'settings-row';
-  const promptCode = document.createElement('code');
-  promptCode.className = 'text-info';
-  promptCode.style.flex = '1';
-  promptCode.style.wordBreak = 'break-word';
-  promptCode.textContent = agentPrompt;
-  const copyBtn = document.createElement('button');
-  copyBtn.textContent = 'Copy';
-  copyBtn.className = 'btn btn-accent';
-  copyBtn.onclick = () => {
-    navigator.clipboard.writeText(agentPrompt).then(() => {
-      copyBtn.textContent = '✓ Copied';
-      setTimeout(() => copyBtn.textContent = 'Copy', 2000);
-    });
-  };
-  promptRow.appendChild(promptCode);
-  promptRow.appendChild(copyBtn);
-  promptWrap.appendChild(promptLabel);
-  promptWrap.appendChild(promptRow);
-  box.appendChild(promptWrap);
+  // Copy-paste agent prompt (not for openclaw_task — agent spawns on demand)
+  if (!asset.openclaw_task) {
+    const agentPrompt = `Work on the "${station}" task station. Call work_task("${station}") and handle visitor requests in a loop.`;
+    const promptWrap = document.createElement('div');
+    promptWrap.className = 'section-mb';
+    const promptLabel = document.createElement('div');
+    promptLabel.className = 'text-muted';
+    promptLabel.style.fontSize = '11px';
+    promptLabel.style.marginBottom = '4px';
+    promptLabel.textContent = 'Paste this into your agent to man this station:';
+    const promptRow = document.createElement('div');
+    promptRow.className = 'settings-row';
+    const promptCode = document.createElement('code');
+    promptCode.className = 'text-info';
+    promptCode.style.flex = '1';
+    promptCode.style.wordBreak = 'break-word';
+    promptCode.textContent = agentPrompt;
+    const copyBtn = document.createElement('button');
+    copyBtn.textContent = 'Copy';
+    copyBtn.className = 'btn btn-accent';
+    copyBtn.onclick = () => {
+      navigator.clipboard.writeText(agentPrompt).then(() => {
+        copyBtn.textContent = '✓ Copied';
+        setTimeout(() => copyBtn.textContent = 'Copy', 2000);
+      });
+    };
+    promptRow.appendChild(promptCode);
+    promptRow.appendChild(copyBtn);
+    promptWrap.appendChild(promptLabel);
+    promptWrap.appendChild(promptRow);
+    box.appendChild(promptWrap);
+  }
 
-  if (!isOpen) {
+  if (!isOpen && !asset.openclaw_task) {
     const closed = document.createElement('div');
     closed.className = 'text-muted section-pad';
     closed.textContent = 'No agent on duty \u2014 task will run when one arrives.';

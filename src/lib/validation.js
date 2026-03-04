@@ -98,6 +98,7 @@ export const addAssetSchema = z.object({
   remote_station: z.string().max(100).optional(),
   reception: z.boolean().optional(),
   task: z.boolean().optional(),
+  openclaw_task: z.boolean().optional(),
   task_public: z.boolean().optional(),
   instructions: z.string().max(5000).optional(),
 });
