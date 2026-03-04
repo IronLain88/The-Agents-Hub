@@ -460,6 +460,30 @@
 					"task_public": true,
 					"instructions": "Check pull request from The-Agents-Hub, review and merge them if it passes your review",
 					"approach": "below"
+				},
+				{
+					"src": "office_16x16",
+					"tx": 8,
+					"ty": 2,
+					"w": 2,
+					"h": 2,
+					"label": "Welcome_Board",
+					"collision": "solid",
+					"welcome": true,
+					"station": "welcome",
+					"approach": "below"
+				},
+				{
+					"src": "office_16x16",
+					"tx": 8,
+					"ty": 2,
+					"w": 2,
+					"h": 2,
+					"label": "Archive",
+					"collision": "solid",
+					"archive": true,
+					"station": "archive",
+					"approach": "below"
 				}
 			]
 		},

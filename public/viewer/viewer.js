@@ -548,6 +548,16 @@ function drawAssetIndicators(asset, propX, propY) {
   const py = propY + asset.position.y * TILE_SIZE;
   const pw = w * TILE_SIZE;
 
+  // Welcome board: subtle green glow when content set
+  if (asset.welcome) {
+    if (asset.content?.data) {
+      const pulse = 0.12 + 0.08 * Math.sin(animTime * 2);
+      ctx.fillStyle = `rgba(80, 220, 120, ${pulse})`;
+      ctx.fillRect(px, py, pw, TILE_SIZE);
+    }
+    return;
+  }
+
   // Archive: warm gold pulse + count badge
   if (asset.archive && asset.content?.data) {
     let cards = [];
@@ -1245,6 +1255,8 @@ async function handleCanvasClick(e) {
     showSignalInfo(asset);
   } else if (asset.logger || asset.name?.toLowerCase().includes('log')) {
     await showActivityLog(asset);
+  } else if (asset.welcome) {
+    showWelcomeBoard(asset);
   } else if (asset.archive) {
     showArchive(asset);
   } else if (asset.station === 'inbox') {
@@ -1337,6 +1349,117 @@ async function processInboxMessage(target, messageText, sender, btn) {
     }
   } catch { btn.textContent = 'Failed'; }
   btn.disabled = false;
+}
+
+function showWelcomeBoard(asset) {
+  const currentText = asset.content?.data || '';
+  const isAuthed = !!CONFIG.apiKey;
+
+  const existing = document.getElementById('station-modal');
+  if (existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'station-modal';
+  modal.className = 'modal-backdrop';
+
+  const box = document.createElement('div');
+  box.className = 'modal-box scrollable';
+
+  const title = document.createElement('div');
+  title.className = 'modal-title';
+  title.textContent = '\ud83d\udcdc Welcome Board';
+  box.appendChild(title);
+
+  const desc = document.createElement('div');
+  desc.className = 'text-muted section-mb';
+  desc.style.fontSize = '11px';
+  desc.textContent = currentText
+    ? 'This message is shown to every agent on connect.'
+    : 'No custom welcome set — agents see the auto-generated default.';
+  box.appendChild(desc);
+
+  const textarea = document.createElement('textarea');
+  textarea.rows = 14;
+  textarea.className = 'form-textarea';
+  textarea.style.cssText = 'width:100%;font-family:monospace;font-size:11px;resize:vertical;';
+  textarea.value = currentText;
+  textarea.readOnly = !isAuthed;
+  box.appendChild(textarea);
+
+  if (isAuthed) {
+    const btnRow = document.createElement('div');
+    btnRow.style.cssText = 'display:flex;gap:6px;margin-top:8px;';
+
+    const saveBtn = document.createElement('button');
+    saveBtn.textContent = 'Save';
+    saveBtn.className = 'btn btn-primary';
+    saveBtn.onclick = async () => {
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'Saving...';
+      try {
+        const res = await fetch(`${HUB_HTTP_URL}/api/assets/${encodeURIComponent(asset.id)}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${CONFIG.apiKey}` },
+          body: JSON.stringify({ content: { type: 'markdown', data: textarea.value } }),
+        });
+        if (res.ok) { saveBtn.textContent = 'Saved'; setTimeout(() => saveBtn.textContent = 'Save', 2000); }
+        else { saveBtn.textContent = 'Failed'; }
+      } catch { saveBtn.textContent = 'Failed'; }
+      saveBtn.disabled = false;
+    };
+    btnRow.appendChild(saveBtn);
+
+    const genBtn = document.createElement('button');
+    genBtn.textContent = 'Generate Default';
+    genBtn.className = 'btn btn-accent';
+    genBtn.onclick = async () => {
+      genBtn.disabled = true;
+      genBtn.textContent = 'Generating...';
+      try {
+        const res = await fetch(`${HUB_HTTP_URL}/api/welcome/default`);
+        if (res.ok) {
+          const { text } = await res.json();
+          textarea.value = text;
+          genBtn.textContent = 'Generated';
+          setTimeout(() => genBtn.textContent = 'Generate Default', 2000);
+        } else { genBtn.textContent = 'Failed'; }
+      } catch { genBtn.textContent = 'Failed'; }
+      genBtn.disabled = false;
+    };
+    btnRow.appendChild(genBtn);
+
+    if (currentText) {
+      const clearBtn = document.createElement('button');
+      clearBtn.textContent = 'Clear';
+      clearBtn.className = 'btn btn-danger';
+      clearBtn.onclick = async () => {
+        clearBtn.disabled = true;
+        try {
+          await fetch(`${HUB_HTTP_URL}/api/assets/${encodeURIComponent(asset.id)}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${CONFIG.apiKey}` },
+            body: JSON.stringify({ content: { type: 'markdown', data: '' } }),
+          });
+          textarea.value = '';
+          desc.textContent = 'No custom welcome set — agents see the auto-generated default.';
+        } catch {}
+        clearBtn.disabled = false;
+      };
+      btnRow.appendChild(clearBtn);
+    }
+
+    box.appendChild(btnRow);
+  }
+
+  modal.appendChild(box);
+  const openedAt = Date.now();
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal && Date.now() - openedAt > 400) modal.remove();
+  });
+  document.addEventListener('keydown', function esc(e) {
+    if (e.key === 'Escape') { modal.remove(); document.removeEventListener('keydown', esc); }
+  });
+  document.body.appendChild(modal);
 }
 
 function showArchive(asset) {
@@ -1454,6 +1577,12 @@ function showInboxMessages(asset) {
         body.textContent = m.text || '(empty)';
 
         card.appendChild(header);
+        if (m.mood) {
+          const moodEl = document.createElement('div');
+          moodEl.style.cssText = 'font-size:10px;color:#aaa;font-style:italic;margin-bottom:4px;';
+          moodEl.textContent = `mood: ${m.mood}`;
+          card.appendChild(moodEl);
+        }
         card.appendChild(body);
 
         // Process row
@@ -1512,6 +1641,12 @@ function showInboxMessages(asset) {
     input.placeholder = 'Send a message...';
     input.maxLength = 2000;
     input.className = 'form-input';
+    const moodInput = document.createElement('input');
+    moodInput.type = 'text';
+    moodInput.placeholder = 'mood (optional)';
+    moodInput.maxLength = 100;
+    moodInput.className = 'form-input';
+    moodInput.style.cssText = 'max-width:120px;font-size:10px;font-style:italic;color:#aaa;';
     const btn = document.createElement('button');
     btn.textContent = 'Send';
     btn.className = 'btn btn-primary';
@@ -1519,14 +1654,18 @@ function showInboxMessages(asset) {
       const text = input.value.trim();
       if (!text) return;
       btn.disabled = true;
+      const body = { from: 'Viewer', text };
+      const mood = moodInput.value.trim();
+      if (mood) body.mood = mood;
       try {
         const res = await fetch(`${HUB_HTTP_URL}/api/inbox`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...(CONFIG.apiKey && { Authorization: `Bearer ${CONFIG.apiKey}` }) },
-          body: JSON.stringify({ from: 'Viewer', text }),
+          body: JSON.stringify(body),
         });
         if (res.ok) {
           input.value = '';
+          moodInput.value = '';
           const modal = document.getElementById('station-modal');
           if (modal) modal.remove();
           const prop = await fetch(`${HUB_HTTP_URL}/api/property`).then(r => r.json());
@@ -1538,6 +1677,7 @@ function showInboxMessages(asset) {
     };
     input.addEventListener('keydown', e => { if (e.key === 'Enter') btn.click(); });
     form.appendChild(input);
+    form.appendChild(moodInput);
     form.appendChild(btn);
 
     if (messages.length > 0) {

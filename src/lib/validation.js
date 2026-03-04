@@ -102,6 +102,7 @@ export const addAssetSchema = z.object({
   task_public: z.boolean().optional(),
   instructions: z.string().max(5000).optional(),
   archive: z.boolean().optional(),
+  welcome: z.boolean().optional(),
 });
 
 // Reception Q&A validation
@@ -147,6 +148,7 @@ function stripHtml(s) {
 export const inboxMessageSchema = z.object({
   from: z.string().min(1, "From cannot be empty").max(100, "From name too long").transform(stripHtml),
   text: z.string().min(1, "Text cannot be empty").max(2000, "Text cannot exceed 2000 characters").transform(stripHtml),
+  mood: z.string().max(100, "Mood too long").transform(stripHtml).optional(),
 });
 
 // Process inbox message to task station

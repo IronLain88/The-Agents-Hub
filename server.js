@@ -481,7 +481,7 @@ app.post("/api/assets", requireAuth, propertyLimiter, (req, res) => {
     return res.status(404).json({ error: "No property loaded" });
   }
 
-  const { name, tileset, tx, ty, x, y, station, approach, collision, remote_url, remote_station, reception, task, openclaw_task, task_public, instructions, archive } = validation.data;
+  const { name, tileset, tx, ty, x, y, station, approach, collision, remote_url, remote_station, reception, task, openclaw_task, task_public, instructions, archive, welcome } = validation.data;
   const isTask = task || openclaw_task;
   const id = `${name.toLowerCase().replace(/\s+/g, "-")}-${Date.now()}`;
   const asset = {
@@ -500,6 +500,7 @@ app.post("/api/assets", requireAuth, propertyLimiter, (req, res) => {
       content: { type: "task", data: JSON.stringify({ status: "idle", result: null }) } }),
     ...(openclaw_task && { openclaw_task: true }),
     ...(archive && { archive: true }),
+    ...(welcome && { welcome: true }),
   };
 
   currentProperty.assets.push(asset);
@@ -681,6 +682,49 @@ function buildWelcome() {
 
   return { stations, signals, boards, tasks, openclawTasks, inbox: inboxCount, agents: others };
 }
+
+// GET /api/welcome — returns custom welcome text if a welcome asset exists, otherwise generates default
+function buildDefaultWelcomeText() {
+  const w = buildWelcome();
+  const lines = [
+    "# The Agents",
+    "",
+    "You have a property — a tile grid with furniture. Each furniture piece can be tagged with a **station** name.",
+    "When you call `update_state({ state, detail })`, your character walks to the matching station.",
+    "Update state at EVERY transition. Set idle when done.",
+    "",
+    "## Your Property",
+    `**Stations:** ${w.stations.join(", ") || "none"}`,
+  ];
+  if (w.inbox > 0) lines.push(`**Inbox:** ${w.inbox} message(s)`);
+  if (w.tasks.length > 0) {
+    lines.push(`**Task stations (interactive — visitors trigger these, you do the work):**`);
+    for (const t of w.tasks) lines.push(`  - ${t}`);
+    lines.push(`*Workflow: subscribe({name}) → check_events() (blocks until triggered) → do the work → answer_task({station, result}) → check_events() again*`);
+  }
+  if (w.openclawTasks.length > 0) {
+    lines.push(`**OpenClaw task stations (auto-spawn — do NOT call work_task on these):**`);
+    for (const t of w.openclawTasks) lines.push(`  - ${t}`);
+  }
+  if (w.signals.length > 0) lines.push(`**Signals:** ${w.signals.join(", ")}`);
+  if (w.boards.length > 0) lines.push(`**Boards with content:** ${w.boards.join(", ")}`);
+  const archiveStations = (currentProperty?.assets || []).filter(a => a.archive).map(a => a.name || a.station || "archive");
+  if (archiveStations.length > 0) lines.push(`**Archive:** ${archiveStations.join(", ")}`);
+  lines.push(`**Total assets:** ${(currentProperty?.assets || []).length}`);
+  return lines.join("\n");
+}
+
+app.get("/api/welcome", (req, res) => {
+  const welcomeAsset = currentProperty?.assets?.find(a => a.welcome);
+  if (welcomeAsset?.content?.data) {
+    return res.json({ source: "custom", text: welcomeAsset.content.data });
+  }
+  res.json({ source: "default", text: buildDefaultWelcomeText() });
+});
+
+app.get("/api/welcome/default", (req, res) => {
+  res.json({ text: buildDefaultWelcomeText() });
+});
 
 // POST /api/state — agent reports its state
 app.post("/api/state", requireAuth, stateLimiter, (req, res) => {
@@ -1314,9 +1358,9 @@ function handleInboxPost(req, res) {
     if (!Array.isArray(messages)) messages = [];
   } catch { messages = []; }
 
-  const { from, text } = validation.data;
+  const { from, text, mood } = validation.data;
   const id = Math.random().toString(36).slice(2, 8);
-  messages.push({ id, from, text, timestamp: new Date().toISOString() });
+  messages.push({ id, from, text, timestamp: new Date().toISOString(), ...(mood && { mood }) });
 
   // Cap at 50 messages
   while (messages.length > 50) messages.shift();

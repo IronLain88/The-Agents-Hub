@@ -814,7 +814,9 @@ function buildCatalogItems() {
 			document.getElementById("cfg-label").value = tile.label || "";
 			document.getElementById("cfg-station").value = tile.station || "";
 			// Load special type fields
-			const specialValue = tile.openclaw_task ? "openclaw-task"
+			const specialValue = tile.welcome ? "welcome"
+				: tile.archive ? "archive"
+				: tile.openclaw_task ? "openclaw-task"
 				: tile.task ? "task"
 				: tile.reception ? "reception"
 				: tile.trigger === "manual" ? "signal-manual"
@@ -929,6 +931,12 @@ function applyTileMetadata(tile) {
 			tile.task_public = document.getElementById("cfg-task-public").checked;
 			const instructions = document.getElementById("cfg-instructions").value.trim();
 			if (instructions) tile.instructions = instructions;
+		} else if (specialValue === "welcome") {
+			tile.welcome = true;
+			tile.station = label || "welcome";
+		} else if (specialValue === "archive") {
+			tile.archive = true;
+			tile.station = label || "archive";
 		}
 		const approach = document.getElementById("cfg-approach").value;
 		if (approach) tile.approach = approach;
