@@ -1287,12 +1287,13 @@ function showImageLightbox(asset) {
 
 function getTaskTargets() {
   const targets = [];
-  // Openclaw task stations
+  // Task stations (both regular and openclaw)
   for (const a of property?.assets || []) {
-    if (!a.openclaw_task || !a.station) continue;
+    if (!a.task || !a.station) continue;
     let status = 'idle';
     try { if (a.content?.data) status = JSON.parse(a.content.data).status || 'idle'; } catch {}
-    targets.push({ type: 'openclaw', station: a.station, label: a.station.replace(/_/g, ' '), busy: status !== 'idle' });
+    const icon = a.openclaw_task ? ' \ud83e\udd16' : '';
+    targets.push({ type: 'task', station: a.station, label: a.station.replace(/_/g, ' ') + icon, busy: status !== 'idle' });
   }
   // Signal stations (for Claude Code agents)
   for (const a of property?.assets || []) {
@@ -1331,22 +1332,12 @@ async function processInboxMessage(target, messageText, sender, btn) {
   if (CONFIG.apiKey) headers['Authorization'] = `Bearer ${CONFIG.apiKey}`;
 
   try {
-    if (target.type === 'openclaw') {
-      const res = await fetch(`${HUB_HTTP_URL}/api/task/${encodeURIComponent(target.station)}/run`, {
-        method: 'POST', headers,
-        body: JSON.stringify({ prompt: `Process inbox message from ${sender}: ${messageText}` }),
-      });
-      if (res.ok) { btn.textContent = 'Sent'; return; }
-      const err = await res.json().catch(() => ({}));
-      btn.textContent = res.status === 409 ? 'Busy' : (err.error || 'Error');
-    } else {
-      const res = await fetch(`${HUB_HTTP_URL}/api/signals/fire`, {
-        method: 'POST', headers,
-        body: JSON.stringify({ station: target.station, payload: { from: sender, text: messageText } }),
-      });
-      if (res.ok) { btn.textContent = 'Fired'; return; }
-      btn.textContent = 'Error';
-    }
+    const res = await fetch(`${HUB_HTTP_URL}/api/signals/fire`, {
+      method: 'POST', headers,
+      body: JSON.stringify({ station: target.station, payload: { from: sender, text: messageText } }),
+    });
+    if (res.ok) { btn.textContent = 'Fired'; return; }
+    btn.textContent = 'Error';
   } catch { btn.textContent = 'Failed'; }
   btn.disabled = false;
 }
@@ -1598,7 +1589,7 @@ function showInboxMessages(asset) {
             if (!select.value) return;
             const target = JSON.parse(select.value);
             // Use card travel endpoint for task targets
-            if (target.type === 'openclaw' && m.id) {
+            if (target.type === 'task' && m.id) {
               processBtn.disabled = true;
               processBtn.textContent = 'Sending...';
               const inboxName = asset.station || 'inbox';
