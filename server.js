@@ -1120,10 +1120,12 @@ app.post("/api/task/:station/run", taskLimiter, (req, res) => {
     return res.status(409).json({ error: "Task is already running" });
   }
 
+  const prompt = typeof req.body?.prompt === "string" ? req.body.prompt.slice(0, 2000) : null;
   state.status = "pending";
   state.result = null;
   state.claimedBy = null;
   state.startedAt = new Date().toISOString();
+  if (prompt) state.prompt = prompt;
   asset.content = { type: "task", data: JSON.stringify(state) };
 
   // Fire signal with instructions
@@ -1161,7 +1163,7 @@ app.post("/api/task/:station/claim", requireAuth, stateLimiter, (req, res) => {
 
   broadcast({ type: "property_update", property: currentProperty });
   savePropertyToDisk().catch(e => console.error("[hub] Failed to save property:", e));
-  res.json({ ok: true, instructions: asset.instructions });
+  res.json({ ok: true, instructions: asset.instructions, prompt: state.prompt || null });
 });
 
 // POST /api/task/:station/result — agent posts a result (requires auth)

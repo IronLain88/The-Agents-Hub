@@ -1568,41 +1568,69 @@ function showTask(asset) {
     box.appendChild(promptWrap);
   }
 
-  if (!isOpen && !asset.openclaw_task) {
+  const isOcTask = !!asset.openclaw_task;
+
+  // Helper: build Run button with optional prompt input
+  function buildRunUI() {
+    const wrap = document.createElement('div');
+
+    // Prompt input for openclaw_task
+    let promptInput = null;
+    if (isOcTask) {
+      promptInput = document.createElement('textarea');
+      promptInput.rows = 2;
+      promptInput.className = 'form-textarea section-mb';
+      promptInput.placeholder = 'Optional: tell the agent what to do...';
+      promptInput.style.width = '100%';
+      promptInput.style.fontFamily = 'monospace';
+      promptInput.style.fontSize = '11px';
+      promptInput.style.resize = 'vertical';
+      wrap.appendChild(promptInput);
+    }
+
+    const btn = document.createElement('button');
+    btn.textContent = 'Run';
+    btn.className = 'btn btn-primary';
+    btn.onclick = async () => {
+      btn.disabled = true;
+      btn.textContent = 'Starting...';
+      try {
+        const headers = { 'Content-Type': 'application/json' };
+        if (CONFIG.apiKey) headers['Authorization'] = `Bearer ${CONFIG.apiKey}`;
+        const body = {};
+        if (promptInput?.value.trim()) body.prompt = promptInput.value.trim();
+        const res = await fetch(`${HUB_HTTP_URL}/api/task/${encodeURIComponent(station)}/run`, {
+          method: 'POST', headers, body: JSON.stringify(body),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ error: res.statusText }));
+          btn.textContent = err.error || 'Error';
+          btn.disabled = false;
+        }
+      } catch {
+        btn.textContent = 'Failed';
+        btn.disabled = false;
+      }
+    };
+    wrap.appendChild(btn);
+    return wrap;
+  }
+
+  if (!isOpen && !isOcTask) {
     const closed = document.createElement('div');
     closed.className = 'text-muted section-pad';
     closed.textContent = 'No agent on duty \u2014 task will run when one arrives.';
     box.appendChild(closed);
   } else if (state.status === 'idle') {
-    const info = document.createElement('div');
-    info.className = 'text-green section-mb';
-    info.textContent = `${agentNames} on duty`;
-    box.appendChild(info);
+    if (isOpen) {
+      const info = document.createElement('div');
+      info.className = 'text-green section-mb';
+      info.textContent = `${agentNames} on duty`;
+      box.appendChild(info);
+    }
 
     if (canRun) {
-      const btn = document.createElement('button');
-      btn.textContent = 'Run';
-      btn.className = 'btn btn-primary';
-      btn.onclick = async () => {
-        btn.disabled = true;
-        btn.textContent = 'Starting...';
-        try {
-          const headers = { 'Content-Type': 'application/json' };
-          if (CONFIG.apiKey) headers['Authorization'] = `Bearer ${CONFIG.apiKey}`;
-          const res = await fetch(`${HUB_HTTP_URL}/api/task/${encodeURIComponent(station)}/run`, {
-            method: 'POST', headers, body: JSON.stringify({}),
-          });
-          if (!res.ok) {
-            const err = await res.json().catch(() => ({ error: res.statusText }));
-            btn.textContent = err.error || 'Error';
-            btn.disabled = false;
-          }
-        } catch {
-          btn.textContent = 'Failed';
-          btn.disabled = false;
-        }
-      };
-      box.appendChild(btn);
+      box.appendChild(buildRunUI());
     } else {
       const locked = document.createElement('div');
       locked.className = 'text-muted text-italic';
@@ -1612,7 +1640,7 @@ function showTask(asset) {
   } else if (state.status === 'pending') {
     const info = document.createElement('div');
     info.className = 'text-yellow section-mb';
-    info.textContent = `${agentNames} is working...`;
+    info.textContent = isOpen ? `${agentNames} is working...` : 'Agent is spinning up...';
     box.appendChild(info);
 
     const spinner = document.createElement('div');
@@ -1641,9 +1669,10 @@ function showTask(asset) {
     resultEl.innerHTML = sanitizeHTML(state.result);
     box.appendChild(resultEl);
 
+    const canRerun = isOpen || isOcTask;
     const clearBtn = document.createElement('button');
-    clearBtn.textContent = isOpen ? 'Run again' : 'Clear results';
-    clearBtn.className = `btn ${isOpen ? 'btn-primary' : 'btn-danger'} section-mt`;
+    clearBtn.textContent = canRerun ? 'Run again' : 'Clear results';
+    clearBtn.className = `btn ${canRerun ? 'btn-primary' : 'btn-danger'} section-mt`;
     clearBtn.onclick = async () => {
       clearBtn.disabled = true;
       try {
