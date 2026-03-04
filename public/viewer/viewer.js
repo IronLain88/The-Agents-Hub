@@ -280,15 +280,19 @@ function connect() {
             showTaskToast(asset, preview);
           }
         }
-        // Auto-refresh open reception modal
-        if (openReceptionStation && msg.property?.assets) {
-          const asset = msg.property.assets.find(a => a.station === openReceptionStation && a.reception);
-          if (asset) showReception(asset);
-        }
-        // Auto-refresh open task modal
-        if (openTaskStation && msg.property?.assets) {
-          const asset = msg.property.assets.find(a => a.station === openTaskStation && a.task);
-          if (asset) showTask(asset);
+        // Auto-refresh open modals (skip if user is editing a text field)
+        const modalEl = document.getElementById('station-modal');
+        const isEditing = modalEl && modalEl.contains(document.activeElement) &&
+          (document.activeElement.tagName === 'TEXTAREA' || document.activeElement.tagName === 'INPUT');
+        if (!isEditing) {
+          if (openReceptionStation && msg.property?.assets) {
+            const asset = msg.property.assets.find(a => a.station === openReceptionStation && a.reception);
+            if (asset) showReception(asset);
+          }
+          if (openTaskStation && msg.property?.assets) {
+            const asset = msg.property.assets.find(a => a.station === openTaskStation && a.task);
+            if (asset) showTask(asset);
+          }
         }
         break;
       case "agent_update":
@@ -1287,12 +1291,13 @@ function showImageLightbox(asset) {
 
 function getTaskTargets() {
   const targets = [];
-  // Openclaw task stations
+  // Task stations (both regular and openclaw)
   for (const a of property?.assets || []) {
-    if (!a.openclaw_task || !a.station) continue;
+    if (!a.task || !a.station) continue;
     let status = 'idle';
     try { if (a.content?.data) status = JSON.parse(a.content.data).status || 'idle'; } catch {}
-    targets.push({ type: 'openclaw', station: a.station, label: a.station.replace(/_/g, ' '), busy: status !== 'idle' });
+    const icon = a.openclaw_task ? ' \ud83e\udd16' : '';
+    targets.push({ type: 'task', station: a.station, label: a.station.replace(/_/g, ' ') + icon, busy: status !== 'idle' });
   }
   // Signal stations (for Claude Code agents)
   for (const a of property?.assets || []) {
@@ -1331,29 +1336,27 @@ async function processInboxMessage(target, messageText, sender, btn) {
   if (CONFIG.apiKey) headers['Authorization'] = `Bearer ${CONFIG.apiKey}`;
 
   try {
-    if (target.type === 'openclaw') {
-      const res = await fetch(`${HUB_HTTP_URL}/api/task/${encodeURIComponent(target.station)}/run`, {
-        method: 'POST', headers,
-        body: JSON.stringify({ prompt: `Process inbox message from ${sender}: ${messageText}` }),
-      });
-      if (res.ok) { btn.textContent = 'Sent'; return; }
-      const err = await res.json().catch(() => ({}));
-      btn.textContent = res.status === 409 ? 'Busy' : (err.error || 'Error');
-    } else {
-      const res = await fetch(`${HUB_HTTP_URL}/api/signals/fire`, {
-        method: 'POST', headers,
-        body: JSON.stringify({ station: target.station, payload: { from: sender, text: messageText } }),
-      });
-      if (res.ok) { btn.textContent = 'Fired'; return; }
-      btn.textContent = 'Error';
-    }
+    const res = await fetch(`${HUB_HTTP_URL}/api/signals/fire`, {
+      method: 'POST', headers,
+      body: JSON.stringify({ station: target.station, payload: { from: sender, text: messageText } }),
+    });
+    if (res.ok) { btn.textContent = 'Fired'; return; }
+    btn.textContent = 'Error';
   } catch { btn.textContent = 'Failed'; }
   btn.disabled = false;
 }
 
-function showWelcomeBoard(asset) {
-  const currentText = asset.content?.data || '';
+async function showWelcomeBoard(asset) {
   const isAuthed = !!CONFIG.apiKey;
+  let currentText = asset.content?.data || '';
+
+  // Fetch default welcome text if no custom content exists
+  if (!currentText) {
+    try {
+      const res = await fetch(`${HUB_HTTP_URL}/api/welcome/default`);
+      if (res.ok) { const { text } = await res.json(); currentText = text; }
+    } catch {}
+  }
 
   const existing = document.getElementById('station-modal');
   if (existing) existing.remove();
@@ -1373,9 +1376,7 @@ function showWelcomeBoard(asset) {
   const desc = document.createElement('div');
   desc.className = 'text-muted section-mb';
   desc.style.fontSize = '11px';
-  desc.textContent = currentText
-    ? 'This message is shown to every agent on connect.'
-    : 'No custom welcome set — agents see the auto-generated default.';
+  desc.textContent = 'This message is shown to every agent on connect.';
   box.appendChild(desc);
 
   const textarea = document.createElement('textarea');
@@ -1598,7 +1599,7 @@ function showInboxMessages(asset) {
             if (!select.value) return;
             const target = JSON.parse(select.value);
             // Use card travel endpoint for task targets
-            if (target.type === 'openclaw' && m.id) {
+            if (target.type === 'task' && m.id) {
               processBtn.disabled = true;
               processBtn.textContent = 'Sending...';
               const inboxName = asset.station || 'inbox';
@@ -1641,12 +1642,6 @@ function showInboxMessages(asset) {
     input.placeholder = 'Send a message...';
     input.maxLength = 2000;
     input.className = 'form-input';
-    const moodInput = document.createElement('input');
-    moodInput.type = 'text';
-    moodInput.placeholder = 'mood (optional)';
-    moodInput.maxLength = 100;
-    moodInput.className = 'form-input';
-    moodInput.style.cssText = 'max-width:120px;font-size:10px;font-style:italic;color:#aaa;';
     const btn = document.createElement('button');
     btn.textContent = 'Send';
     btn.className = 'btn btn-primary';
@@ -1654,18 +1649,14 @@ function showInboxMessages(asset) {
       const text = input.value.trim();
       if (!text) return;
       btn.disabled = true;
-      const body = { from: 'Viewer', text };
-      const mood = moodInput.value.trim();
-      if (mood) body.mood = mood;
       try {
         const res = await fetch(`${HUB_HTTP_URL}/api/inbox`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...(CONFIG.apiKey && { Authorization: `Bearer ${CONFIG.apiKey}` }) },
-          body: JSON.stringify(body),
+          body: JSON.stringify({ from: 'Viewer', text }),
         });
         if (res.ok) {
           input.value = '';
-          moodInput.value = '';
           const modal = document.getElementById('station-modal');
           if (modal) modal.remove();
           const prop = await fetch(`${HUB_HTTP_URL}/api/property`).then(r => r.json());
@@ -1677,7 +1668,6 @@ function showInboxMessages(asset) {
     };
     input.addEventListener('keydown', e => { if (e.key === 'Enter') btn.click(); });
     form.appendChild(input);
-    form.appendChild(moodInput);
     form.appendChild(btn);
 
     if (messages.length > 0) {
@@ -1969,62 +1959,6 @@ function showTask(asset) {
   const isAuthed = !!CONFIG.apiKey;
   const canRun = asset.task_public !== false || isAuthed;
 
-  // Assigned agent
-  if (asset.assigned_to || isAuthed) {
-    const assignWrap = document.createElement('div');
-    assignWrap.className = 'section-mb';
-    assignWrap.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:12px;';
-    const label = document.createElement('span');
-    label.className = 'text-muted';
-    label.textContent = 'Assigned to:';
-    assignWrap.appendChild(label);
-    if (isAuthed) {
-      const select = document.createElement('select');
-      select.className = 'form-input';
-      select.style.cssText = 'flex:1;font-size:11px;padding:2px 6px;';
-      const anyOpt = document.createElement('option');
-      anyOpt.value = '';
-      anyOpt.textContent = 'Any agent';
-      select.appendChild(anyOpt);
-      const seen = new Set();
-      for (const [id, data] of agents) {
-        const base = id.replace(/-[a-z0-9]{4}$/, '');
-        if (seen.has(base)) continue;
-        seen.add(base);
-        const opt = document.createElement('option');
-        opt.value = base;
-        opt.textContent = data.agent_name || base;
-        if (asset.assigned_to === base) opt.selected = true;
-        select.appendChild(opt);
-      }
-      if (asset.assigned_to && !seen.has(asset.assigned_to)) {
-        const opt = document.createElement('option');
-        opt.value = asset.assigned_to;
-        opt.textContent = asset.assigned_to;
-        opt.selected = true;
-        select.appendChild(opt);
-      }
-      select.onchange = async () => {
-        select.disabled = true;
-        try {
-          await fetch(`${HUB_HTTP_URL}/api/task/${encodeURIComponent(station)}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${CONFIG.apiKey}` },
-            body: JSON.stringify({ assigned_to: select.value || null }),
-          });
-        } catch {}
-        select.disabled = false;
-      };
-      assignWrap.appendChild(select);
-    } else {
-      const val = document.createElement('span');
-      val.className = 'text-info';
-      val.textContent = asset.assigned_to;
-      assignWrap.appendChild(val);
-    }
-    box.appendChild(assignWrap);
-  }
-
   // Task instructions — editable for authed users
   if (asset.instructions || isAuthed) {
     const descWrap = document.createElement('div');
@@ -2105,24 +2039,8 @@ function showTask(asset) {
 
   const isOcTask = !!asset.openclaw_task;
 
-  // Helper: build Run button with optional prompt input
+  // Helper: build Run button
   function buildRunUI() {
-    const wrap = document.createElement('div');
-
-    // Prompt input for openclaw_task
-    let promptInput = null;
-    if (isOcTask) {
-      promptInput = document.createElement('textarea');
-      promptInput.rows = 2;
-      promptInput.className = 'form-textarea section-mb';
-      promptInput.placeholder = 'Optional: tell the agent what to do...';
-      promptInput.style.width = '100%';
-      promptInput.style.fontFamily = 'monospace';
-      promptInput.style.fontSize = '11px';
-      promptInput.style.resize = 'vertical';
-      wrap.appendChild(promptInput);
-    }
-
     const btn = document.createElement('button');
     btn.textContent = 'Run';
     btn.className = 'btn btn-primary';
@@ -2132,10 +2050,8 @@ function showTask(asset) {
       try {
         const headers = { 'Content-Type': 'application/json' };
         if (CONFIG.apiKey) headers['Authorization'] = `Bearer ${CONFIG.apiKey}`;
-        const body = {};
-        if (promptInput?.value.trim()) body.prompt = promptInput.value.trim();
         const res = await fetch(`${HUB_HTTP_URL}/api/task/${encodeURIComponent(station)}/run`, {
-          method: 'POST', headers, body: JSON.stringify(body),
+          method: 'POST', headers, body: JSON.stringify({}),
         });
         if (!res.ok) {
           const err = await res.json().catch(() => ({ error: res.statusText }));
@@ -2147,8 +2063,7 @@ function showTask(asset) {
         btn.disabled = false;
       }
     };
-    wrap.appendChild(btn);
-    return wrap;
+    return btn;
   }
 
   if (!isOpen && !isOcTask) {

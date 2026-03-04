@@ -815,6 +815,7 @@ function paintAt(gx, gy) {
 			asset.task = true;
 			asset.trigger = "manual";
 			asset.task_public = selectedPalette.task_public !== false;
+			if (selectedPalette.openclaw_task) asset.openclaw_task = true;
 			if (selectedPalette.instructions) asset.instructions = selectedPalette.instructions;
 			asset.content = { type: "task", data: JSON.stringify({ status: "idle", result: null }) };
 		}

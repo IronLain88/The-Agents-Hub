@@ -430,28 +430,6 @@
 					"ty": 5,
 					"w": 2,
 					"h": 3,
-					"label": "Y2k-Researcher",
-					"station": "Y2k-Researcher",
-					"approach": "on",
-					"approaches": [
-						{
-							"x": 0.5,
-							"y": 2,
-							"dir": "on"
-						}
-					],
-					"collision": "solid",
-					"task": true,
-					"trigger": "manual",
-					"task_public": true,
-					"instructions": "Find y2k related content in recent news"
-				},
-				{
-					"src": "delivery",
-					"tx": 9,
-					"ty": 5,
-					"w": 2,
-					"h": 3,
 					"label": "Openclaw_task_desk",
 					"task": true,
 					"openclaw_task": true,
@@ -483,6 +461,48 @@
 					"collision": "solid",
 					"archive": true,
 					"station": "archive",
+					"approach": "below"
+				},
+				{
+					"src": "office_16x16",
+					"tx": 10,
+					"ty": 0,
+					"w": 2,
+					"h": 2,
+					"label": "Openclaw_task_desk",
+					"collision": "solid",
+					"task": true,
+					"openclaw_task": true,
+					"trigger": "manual",
+					"station": "Openclaw_task_desk",
+					"task_public": true,
+					"approach": "below"
+				},
+				{
+					"src": "delivery",
+					"tx": 9,
+					"ty": 5,
+					"w": 2,
+					"h": 3,
+					"label": "task_table",
+					"collision": "solid",
+					"task": true,
+					"trigger": "manual",
+					"station": "task_table",
+					"task_public": true,
+					"instructions": "Look for Y2K related news",
+					"approach": "below"
+				},
+				{
+					"src": "delivery",
+					"tx": 9,
+					"ty": 1,
+					"w": 3,
+					"h": 3,
+					"label": "Welcome_Message",
+					"collision": "solid",
+					"welcome": true,
+					"station": "Welcome_Message",
 					"approach": "below"
 				}
 			]
