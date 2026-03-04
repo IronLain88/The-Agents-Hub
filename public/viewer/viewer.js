@@ -1342,9 +1342,17 @@ async function processInboxMessage(target, messageText, sender, btn) {
   btn.disabled = false;
 }
 
-function showWelcomeBoard(asset) {
-  const currentText = asset.content?.data || '';
+async function showWelcomeBoard(asset) {
   const isAuthed = !!CONFIG.apiKey;
+  let currentText = asset.content?.data || '';
+
+  // Fetch default welcome text if no custom content exists
+  if (!currentText) {
+    try {
+      const res = await fetch(`${HUB_HTTP_URL}/api/welcome/default`);
+      if (res.ok) { const { text } = await res.json(); currentText = text; }
+    } catch {}
+  }
 
   const existing = document.getElementById('station-modal');
   if (existing) existing.remove();
@@ -1364,9 +1372,7 @@ function showWelcomeBoard(asset) {
   const desc = document.createElement('div');
   desc.className = 'text-muted section-mb';
   desc.style.fontSize = '11px';
-  desc.textContent = currentText
-    ? 'This message is shown to every agent on connect.'
-    : 'No custom welcome set — agents see the auto-generated default.';
+  desc.textContent = 'This message is shown to every agent on connect.';
   box.appendChild(desc);
 
   const textarea = document.createElement('textarea');
@@ -1960,62 +1966,6 @@ function showTask(asset) {
   const isAuthed = !!CONFIG.apiKey;
   const canRun = asset.task_public !== false || isAuthed;
 
-  // Assigned agent
-  if (asset.assigned_to || isAuthed) {
-    const assignWrap = document.createElement('div');
-    assignWrap.className = 'section-mb';
-    assignWrap.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:12px;';
-    const label = document.createElement('span');
-    label.className = 'text-muted';
-    label.textContent = 'Assigned to:';
-    assignWrap.appendChild(label);
-    if (isAuthed) {
-      const select = document.createElement('select');
-      select.className = 'form-input';
-      select.style.cssText = 'flex:1;font-size:11px;padding:2px 6px;';
-      const anyOpt = document.createElement('option');
-      anyOpt.value = '';
-      anyOpt.textContent = 'Any agent';
-      select.appendChild(anyOpt);
-      const seen = new Set();
-      for (const [id, data] of agents) {
-        const base = id.replace(/-[a-z0-9]{4}$/, '');
-        if (seen.has(base)) continue;
-        seen.add(base);
-        const opt = document.createElement('option');
-        opt.value = base;
-        opt.textContent = data.agent_name || base;
-        if (asset.assigned_to === base) opt.selected = true;
-        select.appendChild(opt);
-      }
-      if (asset.assigned_to && !seen.has(asset.assigned_to)) {
-        const opt = document.createElement('option');
-        opt.value = asset.assigned_to;
-        opt.textContent = asset.assigned_to;
-        opt.selected = true;
-        select.appendChild(opt);
-      }
-      select.onchange = async () => {
-        select.disabled = true;
-        try {
-          await fetch(`${HUB_HTTP_URL}/api/task/${encodeURIComponent(station)}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${CONFIG.apiKey}` },
-            body: JSON.stringify({ assigned_to: select.value || null }),
-          });
-        } catch {}
-        select.disabled = false;
-      };
-      assignWrap.appendChild(select);
-    } else {
-      const val = document.createElement('span');
-      val.className = 'text-info';
-      val.textContent = asset.assigned_to;
-      assignWrap.appendChild(val);
-    }
-    box.appendChild(assignWrap);
-  }
-
   // Task instructions — editable for authed users
   if (asset.instructions || isAuthed) {
     const descWrap = document.createElement('div');
@@ -2096,24 +2046,8 @@ function showTask(asset) {
 
   const isOcTask = !!asset.openclaw_task;
 
-  // Helper: build Run button with optional prompt input
+  // Helper: build Run button
   function buildRunUI() {
-    const wrap = document.createElement('div');
-
-    // Prompt input for openclaw_task
-    let promptInput = null;
-    if (isOcTask) {
-      promptInput = document.createElement('textarea');
-      promptInput.rows = 2;
-      promptInput.className = 'form-textarea section-mb';
-      promptInput.placeholder = 'Optional: tell the agent what to do...';
-      promptInput.style.width = '100%';
-      promptInput.style.fontFamily = 'monospace';
-      promptInput.style.fontSize = '11px';
-      promptInput.style.resize = 'vertical';
-      wrap.appendChild(promptInput);
-    }
-
     const btn = document.createElement('button');
     btn.textContent = 'Run';
     btn.className = 'btn btn-primary';
@@ -2123,10 +2057,8 @@ function showTask(asset) {
       try {
         const headers = { 'Content-Type': 'application/json' };
         if (CONFIG.apiKey) headers['Authorization'] = `Bearer ${CONFIG.apiKey}`;
-        const body = {};
-        if (promptInput?.value.trim()) body.prompt = promptInput.value.trim();
         const res = await fetch(`${HUB_HTTP_URL}/api/task/${encodeURIComponent(station)}/run`, {
-          method: 'POST', headers, body: JSON.stringify(body),
+          method: 'POST', headers, body: JSON.stringify({}),
         });
         if (!res.ok) {
           const err = await res.json().catch(() => ({ error: res.statusText }));
@@ -2138,8 +2070,7 @@ function showTask(asset) {
         btn.disabled = false;
       }
     };
-    wrap.appendChild(btn);
-    return wrap;
+    return btn;
   }
 
   if (!isOpen && !isOcTask) {
