@@ -479,17 +479,6 @@ setInterval(() => {
   }
 }, 60_000);
 
-// Agent heartbeat cleanup: remove agents not seen for 3 minutes
-setInterval(() => {
-  const cutoff = Date.now() - 180_000;
-  for (const [id, entry] of agents) {
-    if (entry.last_seen < cutoff) {
-      agents.delete(id);
-      broadcast({ type: "agent_removed", agent_id: id });
-      console.log(`[hub] Removed stale agent ${id}`);
-    }
-  }
-}, 15_000);
 
 // --- Error handling ---
 app.use((err, req, res, next) => {
