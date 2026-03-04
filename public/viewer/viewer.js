@@ -1146,6 +1146,72 @@ function showImageLightbox(asset) {
   document.addEventListener('keydown', e => e.key === 'Escape' && close(), { once: true });
 }
 
+function getTaskTargets() {
+  const targets = [];
+  // Openclaw task stations
+  for (const a of property?.assets || []) {
+    if (!a.openclaw_task || !a.station) continue;
+    let status = 'idle';
+    try { if (a.content?.data) status = JSON.parse(a.content.data).status || 'idle'; } catch {}
+    targets.push({ type: 'openclaw', station: a.station, label: a.station.replace(/_/g, ' '), busy: status !== 'idle' });
+  }
+  // Signal stations (for Claude Code agents)
+  for (const a of property?.assets || []) {
+    if (!a.trigger || a.trigger !== 'manual' || a.task) continue;
+    targets.push({ type: 'signal', station: a.station, label: `${a.station.replace(/_/g, ' ')} (signal)`, busy: false });
+  }
+  return targets;
+}
+
+function buildTargetSelect(targets) {
+  const select = document.createElement('select');
+  select.className = 'form-input';
+  select.style.fontSize = '11px';
+  select.style.padding = '2px 4px';
+  select.style.maxWidth = '180px';
+  const placeholder = document.createElement('option');
+  placeholder.textContent = 'Route to...';
+  placeholder.value = '';
+  placeholder.disabled = true;
+  placeholder.selected = true;
+  select.appendChild(placeholder);
+  for (const t of targets) {
+    const opt = document.createElement('option');
+    opt.value = JSON.stringify({ type: t.type, station: t.station });
+    opt.textContent = t.label + (t.busy ? ' (busy)' : '');
+    opt.disabled = t.busy;
+    select.appendChild(opt);
+  }
+  return select;
+}
+
+async function processInboxMessage(target, messageText, sender, btn) {
+  btn.disabled = true;
+  btn.textContent = 'Sending...';
+  const headers = { 'Content-Type': 'application/json' };
+  if (CONFIG.apiKey) headers['Authorization'] = `Bearer ${CONFIG.apiKey}`;
+
+  try {
+    if (target.type === 'openclaw') {
+      const res = await fetch(`${HUB_HTTP_URL}/api/task/${encodeURIComponent(target.station)}/run`, {
+        method: 'POST', headers,
+        body: JSON.stringify({ prompt: `Process inbox message from ${sender}: ${messageText}` }),
+      });
+      if (res.ok) { btn.textContent = 'Sent'; return; }
+      const err = await res.json().catch(() => ({}));
+      btn.textContent = res.status === 409 ? 'Busy' : (err.error || 'Error');
+    } else {
+      const res = await fetch(`${HUB_HTTP_URL}/api/signals/fire`, {
+        method: 'POST', headers,
+        body: JSON.stringify({ station: target.station, payload: { from: sender, text: messageText } }),
+      });
+      if (res.ok) { btn.textContent = 'Fired'; return; }
+      btn.textContent = 'Error';
+    }
+  } catch { btn.textContent = 'Failed'; }
+  btn.disabled = false;
+}
+
 function showInboxMessages(asset) {
   let messages = [];
   try {
@@ -1156,15 +1222,64 @@ function showInboxMessages(asset) {
     }
   } catch { /* ignore parse errors */ }
 
-  const lines = messages.length
-    ? messages.map(m => {
-        const time = m.timestamp ? new Date(m.timestamp).toLocaleString() : '';
-        const from = m.from || 'Unknown';
-        return `${from}${time ? '  (' + time + ')' : ''}\n  ${m.text || '(empty)'}`;
-      }).join('\n\n')
-    : 'No messages.';
+  const targets = getTaskTargets();
 
-  showModal('📬 Inbox', lines, messages.length > 0, null, null, null, (box) => {
+  showModal('📬 Inbox', messages.length ? '' : 'No messages.', messages.length > 0, null, null, null, (box) => {
+    // Message list
+    if (messages.length) {
+      const contentEl = box.querySelector('.modal-content');
+      if (contentEl) contentEl.remove();
+
+      const list = document.createElement('div');
+      list.style.cssText = 'display:flex;flex-direction:column;gap:8px;margin-bottom:8px;';
+
+      for (const m of messages) {
+        const card = document.createElement('div');
+        card.style.cssText = 'border:1px solid rgba(255,255,255,0.1);border-radius:6px;padding:8px;background:rgba(0,0,0,0.2);';
+
+        const header = document.createElement('div');
+        header.style.cssText = 'display:flex;justify-content:space-between;font-size:11px;color:#aaa;margin-bottom:4px;';
+        const from = document.createElement('span');
+        from.style.fontWeight = 'bold';
+        from.style.color = '#ddd';
+        from.textContent = m.from || 'Unknown';
+        const time = document.createElement('span');
+        time.textContent = m.timestamp ? new Date(m.timestamp).toLocaleString() : '';
+        header.appendChild(from);
+        header.appendChild(time);
+
+        const body = document.createElement('div');
+        body.style.cssText = 'font-size:12px;white-space:pre-wrap;word-break:break-word;margin-bottom:6px;';
+        body.textContent = m.text || '(empty)';
+
+        card.appendChild(header);
+        card.appendChild(body);
+
+        // Process row
+        if (targets.length > 0) {
+          const row = document.createElement('div');
+          row.style.cssText = 'display:flex;gap:4px;align-items:center;';
+          const select = buildTargetSelect(targets);
+          const processBtn = document.createElement('button');
+          processBtn.textContent = 'Process';
+          processBtn.className = 'btn btn-accent';
+          processBtn.style.cssText = 'font-size:11px;padding:2px 8px;';
+          processBtn.onclick = () => {
+            if (!select.value) return;
+            const target = JSON.parse(select.value);
+            processInboxMessage(target, m.text || '', m.from || 'Unknown', processBtn);
+          };
+          row.appendChild(select);
+          row.appendChild(processBtn);
+          card.appendChild(row);
+        }
+
+        list.appendChild(card);
+      }
+      box.insertBefore(list, box.querySelector('.inline-row'));
+    }
+
+    // Send form
     const form = document.createElement('div');
     form.className = 'inline-row';
     const input = document.createElement('input');
@@ -1187,7 +1302,6 @@ function showInboxMessages(asset) {
         });
         if (res.ok) {
           input.value = '';
-          // Refresh inbox modal
           const modal = document.getElementById('station-modal');
           if (modal) modal.remove();
           const prop = await fetch(`${HUB_HTTP_URL}/api/property`).then(r => r.json());

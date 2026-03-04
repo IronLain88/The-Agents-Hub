@@ -452,22 +452,14 @@
 					"ty": 5,
 					"w": 2,
 					"h": 3,
-					"label": "Openclaw_Task_Pull_Request",
-					"station": "Openclaw_Task_Pull_Request",
-					"approach": "on",
-					"approaches": [
-						{
-							"x": 0.5,
-							"y": 2,
-							"dir": "on"
-						}
-					],
-					"collision": "solid",
+					"label": "Openclaw_task_desk",
 					"task": true,
 					"openclaw_task": true,
 					"trigger": "manual",
-					"task_public": false,
-					"instructions": "Check The-Agents-Hub for open pull request, review them and merge"
+					"station": "Openclaw_task_desk",
+					"task_public": true,
+					"instructions": "Check pull request from The-Agents-Hub, review and merge them if it passes your review",
+					"approach": "below"
 				}
 			]
 		},
