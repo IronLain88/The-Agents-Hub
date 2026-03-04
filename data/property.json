@@ -7876,7 +7876,9 @@
 			"content": {
 				"type": "task",
 				"data": "{\"status\":\"idle\",\"result\":null}"
-			}
+			},
+			"openclaw_task": true,
+			"instructions": "Check pull request from The-Agents-Hub, review and merge them if it passes your review"
 		},
 		{
 			"id": "asset-1772636150707-7l6t",
@@ -7900,7 +7902,9 @@
 			"content": {
 				"type": "task",
 				"data": "{\"status\":\"idle\",\"result\":null}"
-			}
+			},
+			"openclaw_task": true,
+			"instructions": "Check pull request from The-Agents-Hub, review and merge them if it passes your review"
 		},
 		{
 			"id": "asset-1772636153710-yscq",
@@ -7924,7 +7928,9 @@
 			"content": {
 				"type": "task",
 				"data": "{\"status\":\"idle\",\"result\":null}"
-			}
+			},
+			"openclaw_task": true,
+			"instructions": "Check pull request from The-Agents-Hub, review and merge them if it passes your review"
 		}
 	],
 	"collision": []
