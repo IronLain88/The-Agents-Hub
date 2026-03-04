@@ -1638,12 +1638,6 @@ function showInboxMessages(asset) {
     input.placeholder = 'Send a message...';
     input.maxLength = 2000;
     input.className = 'form-input';
-    const moodInput = document.createElement('input');
-    moodInput.type = 'text';
-    moodInput.placeholder = 'mood (optional)';
-    moodInput.maxLength = 100;
-    moodInput.className = 'form-input';
-    moodInput.style.cssText = 'max-width:120px;font-size:10px;font-style:italic;color:#aaa;';
     const btn = document.createElement('button');
     btn.textContent = 'Send';
     btn.className = 'btn btn-primary';
@@ -1651,18 +1645,14 @@ function showInboxMessages(asset) {
       const text = input.value.trim();
       if (!text) return;
       btn.disabled = true;
-      const body = { from: 'Viewer', text };
-      const mood = moodInput.value.trim();
-      if (mood) body.mood = mood;
       try {
         const res = await fetch(`${HUB_HTTP_URL}/api/inbox`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...(CONFIG.apiKey && { Authorization: `Bearer ${CONFIG.apiKey}` }) },
-          body: JSON.stringify(body),
+          body: JSON.stringify({ from: 'Viewer', text }),
         });
         if (res.ok) {
           input.value = '';
-          moodInput.value = '';
           const modal = document.getElementById('station-modal');
           if (modal) modal.remove();
           const prop = await fetch(`${HUB_HTTP_URL}/api/property`).then(r => r.json());
@@ -1674,7 +1664,6 @@ function showInboxMessages(asset) {
     };
     input.addEventListener('keydown', e => { if (e.key === 'Enter') btn.click(); });
     form.appendChild(input);
-    form.appendChild(moodInput);
     form.appendChild(btn);
 
     if (messages.length > 0) {
