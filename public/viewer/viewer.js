@@ -117,6 +117,8 @@ const imageAssets = new Map();
 const characterSprites = {}; // { charName: { pose: Image } }
 let animTime = 0;
 const signalFlash = new Map(); // station -> Date.now() of last fire
+const taskPrevStatus = new Map(); // station -> previous task status
+const travelingCards = new Map(); // card_id -> { fromX, fromY, toX, toY, startTime, duration }
 const bubbleShowUntil = new Map(); // agentId -> timestamp when bubble auto-hides
 const bubblePinned = new Set(); // agentIds with pinned (clicked) bubbles
 
@@ -259,6 +261,25 @@ function connect() {
         break;
       case "property_update":
         applyPropertyData(msg.property);
+        // Detect task completions and show toasts
+        for (const asset of msg.property?.assets || []) {
+          if (!asset.task) continue;
+          let status = 'idle';
+          try {
+            const d = typeof asset.content?.data === 'string' ? JSON.parse(asset.content.data) : asset.content?.data;
+            if (d?.status) status = d.status;
+          } catch {}
+          const prev = taskPrevStatus.get(asset.station);
+          taskPrevStatus.set(asset.station, status);
+          if (status === 'done' && prev && prev !== 'done') {
+            let preview = '';
+            try {
+              const d = typeof asset.content?.data === 'string' ? JSON.parse(asset.content.data) : asset.content?.data;
+              if (d?.result) preview = String(d.result).replace(/<[^>]*>/g, '').slice(0, 80);
+            } catch {}
+            showTaskToast(asset, preview);
+          }
+        }
         // Auto-refresh open reception modal
         if (openReceptionStation && msg.property?.assets) {
           const asset = msg.property.assets.find(a => a.station === openReceptionStation && a.reception);
@@ -281,6 +302,15 @@ function connect() {
         bubblePinned.delete(msg.agent_id);
         for (const [, occ] of stationOccupants) occ.delete(msg.agent_id);
         break;
+      case "card_travel": {
+        const fp = msg.from_pos, tp = msg.to_pos;
+        travelingCards.set(msg.card_id, {
+          fromX: (fp.x + 0.5) * TILE_SIZE, fromY: (fp.y + 0.5) * TILE_SIZE,
+          toX: (tp.x + 0.5) * TILE_SIZE, toY: (tp.y + 0.5) * TILE_SIZE,
+          startTime: performance.now(), duration: 1500,
+        });
+        break;
+      }
       case "signal":
         if (msg.station) signalFlash.set(msg.station, Date.now());
         if (msg.payload !== undefined) {
@@ -337,6 +367,31 @@ function handleSignalWithPayload(msg) {
     toast.style.animation = 'slideOutDown 0.3s ease-in';
     setTimeout(() => toast.remove(), 300);
   }, 5000);
+}
+
+function showTaskToast(asset, preview) {
+  const toast = document.createElement('div');
+  toast.className = 'toast';
+  toast.style.cursor = 'pointer';
+
+  const title = document.createElement('div');
+  title.className = 'toast-title';
+  title.textContent = `✅ Task complete: ${asset.station.replace(/_/g, ' ')}`;
+
+  toast.appendChild(title);
+  if (preview) {
+    const prev = document.createElement('div');
+    prev.className = 'toast-details';
+    prev.textContent = preview;
+    toast.appendChild(prev);
+  }
+  toast.onclick = () => { toast.remove(); showTask(asset); };
+  document.body.appendChild(toast);
+
+  setTimeout(() => {
+    toast.style.animation = 'slideOutDown 0.3s ease-in';
+    setTimeout(() => toast.remove(), 300);
+  }, 8000);
 }
 
 function updateAgentPath(agentId, data) {
@@ -493,6 +548,33 @@ function drawAssetIndicators(asset, propX, propY) {
   const py = propY + asset.position.y * TILE_SIZE;
   const pw = w * TILE_SIZE;
 
+  // Archive: warm gold pulse + count badge
+  if (asset.archive && asset.content?.data) {
+    let cards = [];
+    try {
+      const d = typeof asset.content.data === 'string' ? JSON.parse(asset.content.data) : asset.content.data;
+      if (Array.isArray(d)) cards = d;
+    } catch {}
+    if (cards.length) {
+      const pulse = 0.15 + 0.1 * Math.sin(animTime * 2);
+      ctx.fillStyle = `rgba(240, 216, 136, ${pulse})`;
+      ctx.fillRect(px, py, pw, TILE_SIZE);
+      // Count badge
+      const bx = px + pw - 4;
+      const by = py + 4;
+      ctx.fillStyle = '#c8a84e';
+      ctx.beginPath();
+      ctx.arc(bx, by, 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#1a1a1a';
+      ctx.font = 'bold 7px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(cards.length > 99 ? '99+' : String(cards.length), bx, by);
+    }
+    return;
+  }
+
   // Inbox: pulsing glow + count badge
   if (asset.station === 'inbox' && asset.content?.data) {
     let msgs = [];
@@ -537,6 +619,10 @@ function drawAssetIndicators(asset, propX, propY) {
       ctx.fillRect(px, py, pw, TILE_SIZE);
     } else if (hasAgent && status === 'idle') {
       const pulse = 0.15 + 0.1 * Math.sin(animTime * 2);
+      ctx.fillStyle = `rgba(80, 220, 120, ${pulse})`;
+      ctx.fillRect(px, py, pw, TILE_SIZE);
+    } else if (status === 'done') {
+      const pulse = 0.2 + 0.15 * Math.sin(animTime * 3);
       ctx.fillStyle = `rgba(80, 220, 120, ${pulse})`;
       ctx.fillRect(px, py, pw, TILE_SIZE);
     } else if (asset.openclaw_task && status === 'idle') {
@@ -636,6 +722,42 @@ function drawAnimatedSprite(file, x, y, w, fps, propX, propY) {
     frame * fw, 0, fw, img.naturalHeight,
     propX + x * TILE_SIZE, propY + y * TILE_SIZE, fw, img.naturalHeight
   );
+}
+
+function drawTravelingCards(now) {
+  for (const [id, card] of travelingCards) {
+    const elapsed = now - card.startTime;
+    const t = Math.min(elapsed / card.duration, 1);
+    if (t >= 1) { travelingCards.delete(id); continue; }
+
+    // Ease in-out
+    const ease = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+    const x = card.fromX + (card.toX - card.fromX) * ease;
+    const y = card.fromY + (card.toY - card.fromY) * ease - 20 * Math.sin(t * Math.PI);
+
+    // Sparkle trail
+    for (let i = 0; i < 3; i++) {
+      const st = Math.max(0, t - (i + 1) * 0.04);
+      const se = st < 0.5 ? 2 * st * st : 1 - Math.pow(-2 * st + 2, 2) / 2;
+      const sx = card.fromX + (card.toX - card.fromX) * se;
+      const sy = card.fromY + (card.toY - card.fromY) * se - 20 * Math.sin(st * Math.PI);
+      const alpha = 0.4 * (1 - t) * (1 - i * 0.3);
+      ctx.fillStyle = `rgba(240, 216, 136, ${alpha})`;
+      ctx.fillRect(sx - 1, sy - 1, 2, 2);
+    }
+
+    // Envelope body
+    ctx.fillStyle = '#f0d888';
+    ctx.fillRect(x - 5, y - 3, 10, 7);
+    // Flap
+    ctx.beginPath();
+    ctx.moveTo(x - 5, y - 3);
+    ctx.lineTo(x, y + 1);
+    ctx.lineTo(x + 5, y - 3);
+    ctx.closePath();
+    ctx.fillStyle = '#d4bc6a';
+    ctx.fill();
+  }
 }
 
 function drawCharacter(ch, data) {
@@ -995,6 +1117,9 @@ function loop(time) {
       drawCharacter(ch, data);
     }
 
+    // Traveling cards
+    drawTravelingCards(time);
+
     ctx.restore();
 
     // Title logo — "The Agents" bottom-left
@@ -1120,6 +1245,8 @@ async function handleCanvasClick(e) {
     showSignalInfo(asset);
   } else if (asset.logger || asset.name?.toLowerCase().includes('log')) {
     await showActivityLog(asset);
+  } else if (asset.archive) {
+    showArchive(asset);
   } else if (asset.station === 'inbox') {
     showInboxMessages(asset);
   } else if (asset.remote_url && asset.remote_station) {
@@ -1212,6 +1339,58 @@ async function processInboxMessage(target, messageText, sender, btn) {
   btn.disabled = false;
 }
 
+function showArchive(asset) {
+  let cards = [];
+  try {
+    if (asset.content?.data) {
+      const parsed = typeof asset.content.data === 'string' ? JSON.parse(asset.content.data) : asset.content.data;
+      if (Array.isArray(parsed)) cards = parsed;
+    }
+  } catch {}
+
+  showModal('\ud83d\udce6 Archive', cards.length ? '' : 'No archived cards.', cards.length > 0, null, null, null, (box) => {
+    if (!cards.length) return;
+    const contentEl = box.querySelector('.modal-content');
+    if (contentEl) contentEl.remove();
+
+    const list = document.createElement('div');
+    list.style.cssText = 'display:flex;flex-direction:column;gap:8px;margin-bottom:8px;';
+
+    for (const c of cards) {
+      const card = document.createElement('div');
+      card.style.cssText = 'border-left:3px solid #f0d888;border-radius:6px;padding:8px;background:linear-gradient(135deg,rgba(30,25,15,0.6),rgba(0,0,0,0.2));';
+
+      const header = document.createElement('div');
+      header.style.cssText = 'display:flex;justify-content:space-between;font-size:11px;color:#aaa;margin-bottom:4px;';
+      const from = document.createElement('span');
+      from.style.cssText = 'font-weight:bold;color:#f0d888;';
+      from.textContent = '\u2709\ufe0f ' + (c.from || 'Unknown');
+      const time = document.createElement('span');
+      time.textContent = c.completedAt ? new Date(c.completedAt).toLocaleString() : '';
+      header.appendChild(from);
+      header.appendChild(time);
+
+      const text = document.createElement('div');
+      text.style.cssText = 'font-size:12px;white-space:pre-wrap;word-break:break-word;margin-bottom:6px;';
+      text.textContent = c.text || '';
+
+      card.appendChild(header);
+      card.appendChild(text);
+
+      if (c.result) {
+        const result = document.createElement('div');
+        result.className = 'rich-content';
+        result.style.cssText = 'font-size:11px;border-top:1px solid rgba(255,255,255,0.1);padding-top:6px;';
+        result.innerHTML = sanitizeHTML(c.result);
+        card.appendChild(result);
+      }
+
+      list.appendChild(card);
+    }
+    box.insertBefore(list, box.querySelector('.inline-row'));
+  });
+}
+
 function showInboxMessages(asset) {
   let messages = [];
   try {
@@ -1235,18 +1414,40 @@ function showInboxMessages(asset) {
 
       for (const m of messages) {
         const card = document.createElement('div');
-        card.style.cssText = 'border:1px solid rgba(255,255,255,0.1);border-radius:6px;padding:8px;background:rgba(0,0,0,0.2);';
+        card.style.cssText = 'border:1px solid rgba(255,255,255,0.1);border-left:3px solid #f0d888;border-radius:6px;padding:8px;background:linear-gradient(135deg,rgba(30,25,15,0.6),rgba(0,0,0,0.2));box-shadow:0 1px 4px rgba(0,0,0,0.3),inset 0 1px 0 rgba(240,216,136,0.05);';
 
         const header = document.createElement('div');
-        header.style.cssText = 'display:flex;justify-content:space-between;font-size:11px;color:#aaa;margin-bottom:4px;';
+        header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;font-size:11px;color:#aaa;margin-bottom:4px;';
         const from = document.createElement('span');
         from.style.fontWeight = 'bold';
-        from.style.color = '#ddd';
-        from.textContent = m.from || 'Unknown';
+        from.style.color = '#f0d888';
+        from.textContent = '\u2709\ufe0f ' + (m.from || 'Unknown');
+        const headerRight = document.createElement('span');
+        headerRight.style.cssText = 'display:flex;align-items:center;gap:6px;';
         const time = document.createElement('span');
         time.textContent = m.timestamp ? new Date(m.timestamp).toLocaleString() : '';
+        const delBtn = document.createElement('button');
+        delBtn.textContent = '✕';
+        delBtn.title = 'Delete message';
+        delBtn.style.cssText = 'background:none;border:none;color:#888;cursor:pointer;font-size:13px;padding:0 2px;line-height:1;';
+        delBtn.onmouseenter = () => delBtn.style.color = '#e55';
+        delBtn.onmouseleave = () => delBtn.style.color = '#888';
+        delBtn.onclick = async () => {
+          delBtn.disabled = true;
+          const inboxName = asset.station || 'inbox';
+          try {
+            const res = await fetch(`${HUB_HTTP_URL}/api/inbox/${encodeURIComponent(inboxName)}/${encodeURIComponent(m.id)}`, {
+              method: 'DELETE',
+              headers: CONFIG.apiKey ? { Authorization: `Bearer ${CONFIG.apiKey}` } : {},
+            });
+            if (res.ok) card.remove();
+          } catch { /* ignore */ }
+          delBtn.disabled = false;
+        };
+        headerRight.appendChild(time);
+        headerRight.appendChild(delBtn);
         header.appendChild(from);
-        header.appendChild(time);
+        header.appendChild(headerRight);
 
         const body = document.createElement('div');
         body.style.cssText = 'font-size:12px;white-space:pre-wrap;word-break:break-word;margin-bottom:6px;';
@@ -1264,10 +1465,34 @@ function showInboxMessages(asset) {
           processBtn.textContent = 'Process';
           processBtn.className = 'btn btn-accent';
           processBtn.style.cssText = 'font-size:11px;padding:2px 8px;';
-          processBtn.onclick = () => {
+          processBtn.onclick = async () => {
             if (!select.value) return;
             const target = JSON.parse(select.value);
-            processInboxMessage(target, m.text || '', m.from || 'Unknown', processBtn);
+            // Use card travel endpoint for task targets
+            if (target.type === 'openclaw' && m.id) {
+              processBtn.disabled = true;
+              processBtn.textContent = 'Sending...';
+              const inboxName = asset.station || 'inbox';
+              const headers = { 'Content-Type': 'application/json' };
+              if (CONFIG.apiKey) headers['Authorization'] = `Bearer ${CONFIG.apiKey}`;
+              try {
+                const res = await fetch(`${HUB_HTTP_URL}/api/inbox/${encodeURIComponent(inboxName)}/${encodeURIComponent(m.id)}/process`, {
+                  method: 'POST', headers,
+                  body: JSON.stringify({ target_station: target.station }),
+                });
+                if (res.ok) {
+                  card.style.opacity = '0.3';
+                  card.style.transition = 'opacity 0.5s';
+                  processBtn.textContent = 'Sent';
+                } else {
+                  const err = await res.json().catch(() => ({}));
+                  processBtn.textContent = res.status === 409 ? 'Busy' : (err.error || 'Error');
+                  processBtn.disabled = false;
+                }
+              } catch { processBtn.textContent = 'Failed'; processBtn.disabled = false; }
+            } else {
+              processInboxMessage(target, m.text || '', m.from || 'Unknown', processBtn);
+            }
           };
           row.appendChild(select);
           row.appendChild(processBtn);
@@ -1604,6 +1829,62 @@ function showTask(asset) {
   const isAuthed = !!CONFIG.apiKey;
   const canRun = asset.task_public !== false || isAuthed;
 
+  // Assigned agent
+  if (asset.assigned_to || isAuthed) {
+    const assignWrap = document.createElement('div');
+    assignWrap.className = 'section-mb';
+    assignWrap.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:12px;';
+    const label = document.createElement('span');
+    label.className = 'text-muted';
+    label.textContent = 'Assigned to:';
+    assignWrap.appendChild(label);
+    if (isAuthed) {
+      const select = document.createElement('select');
+      select.className = 'form-input';
+      select.style.cssText = 'flex:1;font-size:11px;padding:2px 6px;';
+      const anyOpt = document.createElement('option');
+      anyOpt.value = '';
+      anyOpt.textContent = 'Any agent';
+      select.appendChild(anyOpt);
+      const seen = new Set();
+      for (const [id, data] of agents) {
+        const base = id.replace(/-[a-z0-9]{4}$/, '');
+        if (seen.has(base)) continue;
+        seen.add(base);
+        const opt = document.createElement('option');
+        opt.value = base;
+        opt.textContent = data.agent_name || base;
+        if (asset.assigned_to === base) opt.selected = true;
+        select.appendChild(opt);
+      }
+      if (asset.assigned_to && !seen.has(asset.assigned_to)) {
+        const opt = document.createElement('option');
+        opt.value = asset.assigned_to;
+        opt.textContent = asset.assigned_to;
+        opt.selected = true;
+        select.appendChild(opt);
+      }
+      select.onchange = async () => {
+        select.disabled = true;
+        try {
+          await fetch(`${HUB_HTTP_URL}/api/task/${encodeURIComponent(station)}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${CONFIG.apiKey}` },
+            body: JSON.stringify({ assigned_to: select.value || null }),
+          });
+        } catch {}
+        select.disabled = false;
+      };
+      assignWrap.appendChild(select);
+    } else {
+      const val = document.createElement('span');
+      val.className = 'text-info';
+      val.textContent = asset.assigned_to;
+      assignWrap.appendChild(val);
+    }
+    box.appendChild(assignWrap);
+  }
+
   // Task instructions — editable for authed users
   if (asset.instructions || isAuthed) {
     const descWrap = document.createElement('div');
@@ -1752,6 +2033,21 @@ function showTask(asset) {
       box.appendChild(locked);
     }
   } else if (state.status === 'pending') {
+    // Show card origin if present
+    if (state.card) {
+      const cardEl = document.createElement('div');
+      cardEl.style.cssText = 'border-left:3px solid #f0d888;padding:6px 10px;margin-bottom:10px;background:rgba(240,216,136,0.06);border-radius:0 6px 6px 0;font-size:12px;';
+      const cardHeader = document.createElement('div');
+      cardHeader.style.cssText = 'color:#f0d888;font-weight:bold;margin-bottom:2px;';
+      cardHeader.textContent = `\u2709\ufe0f ${state.card.from || 'Unknown'} (${state.card.source || 'inbox'})`;
+      const cardText = document.createElement('div');
+      cardText.style.cssText = 'color:#ccc;white-space:pre-wrap;word-break:break-word;';
+      cardText.textContent = state.card.text || '';
+      cardEl.appendChild(cardHeader);
+      cardEl.appendChild(cardText);
+      box.appendChild(cardEl);
+    }
+
     const info = document.createElement('div');
     info.className = 'text-yellow section-mb';
     info.textContent = isOpen ? `${agentNames} is working...` : 'Agent is spinning up...';
@@ -1778,15 +2074,33 @@ function showTask(asset) {
       box.appendChild(cancel);
     }
   } else if (state.status === 'done') {
+    // Show card origin if present
+    if (state.card) {
+      const cardEl = document.createElement('div');
+      cardEl.style.cssText = 'border-left:3px solid #f0d888;padding:6px 10px;margin-bottom:10px;background:rgba(240,216,136,0.06);border-radius:0 6px 6px 0;font-size:12px;';
+      const cardHeader = document.createElement('div');
+      cardHeader.style.cssText = 'color:#f0d888;font-weight:bold;margin-bottom:2px;';
+      cardHeader.textContent = `\u2709\ufe0f ${state.card.from || 'Unknown'} (${state.card.source || 'inbox'})`;
+      const cardText = document.createElement('div');
+      cardText.style.cssText = 'color:#ccc;white-space:pre-wrap;word-break:break-word;';
+      cardText.textContent = state.card.text || '';
+      cardEl.appendChild(cardHeader);
+      cardEl.appendChild(cardText);
+      box.appendChild(cardEl);
+    }
+
     const resultEl = document.createElement('div');
     resultEl.className = 'rich-content section-mb';
     resultEl.innerHTML = sanitizeHTML(state.result);
     box.appendChild(resultEl);
 
+    const btnRow = document.createElement('div');
+    btnRow.style.cssText = 'display:flex;gap:6px;margin-top:8px;';
+
     const canRerun = isOpen || isOcTask;
     const clearBtn = document.createElement('button');
     clearBtn.textContent = canRerun ? 'Run again' : 'Clear results';
-    clearBtn.className = `btn ${canRerun ? 'btn-primary' : 'btn-danger'} section-mt`;
+    clearBtn.className = `btn ${canRerun ? 'btn-primary' : 'btn-danger'}`;
     clearBtn.onclick = async () => {
       clearBtn.disabled = true;
       try {
@@ -1796,7 +2110,31 @@ function showTask(asset) {
         });
       } catch {}
     };
-    box.appendChild(clearBtn);
+    btnRow.appendChild(clearBtn);
+
+    // Archive button when done + has card + archive station exists
+    if (state.card && property?.assets?.some(a => a.archive)) {
+      const archiveBtn = document.createElement('button');
+      archiveBtn.textContent = 'Archive';
+      archiveBtn.className = 'btn btn-accent';
+      archiveBtn.onclick = async () => {
+        archiveBtn.disabled = true;
+        archiveBtn.textContent = 'Archiving...';
+        try {
+          const headers = { 'Content-Type': 'application/json' };
+          if (CONFIG.apiKey) headers['Authorization'] = `Bearer ${CONFIG.apiKey}`;
+          const res = await fetch(`${HUB_HTTP_URL}/api/archive/${encodeURIComponent(station)}`, { method: 'POST', headers });
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            archiveBtn.textContent = err.error || 'Error';
+            archiveBtn.disabled = false;
+          }
+        } catch { archiveBtn.textContent = 'Failed'; archiveBtn.disabled = false; }
+      };
+      btnRow.appendChild(archiveBtn);
+    }
+
+    box.appendChild(btnRow);
   }
 
   modal.appendChild(box);

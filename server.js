@@ -481,7 +481,7 @@ app.post("/api/assets", requireAuth, propertyLimiter, (req, res) => {
     return res.status(404).json({ error: "No property loaded" });
   }
 
-  const { name, tileset, tx, ty, x, y, station, approach, collision, remote_url, remote_station, reception, task, openclaw_task, task_public, instructions } = validation.data;
+  const { name, tileset, tx, ty, x, y, station, approach, collision, remote_url, remote_station, reception, task, openclaw_task, task_public, instructions, archive } = validation.data;
   const isTask = task || openclaw_task;
   const id = `${name.toLowerCase().replace(/\s+/g, "-")}-${Date.now()}`;
   const asset = {
@@ -499,6 +499,7 @@ app.post("/api/assets", requireAuth, propertyLimiter, (req, res) => {
     ...(isTask && { task: true, trigger: "manual", instructions, task_public: task_public ?? true,
       content: { type: "task", data: JSON.stringify({ status: "idle", result: null }) } }),
     ...(openclaw_task && { openclaw_task: true }),
+    ...(archive && { archive: true }),
   };
 
   currentProperty.assets.push(asset);
@@ -1158,6 +1159,9 @@ app.post("/api/task/:station/claim", requireAuth, stateLimiter, (req, res) => {
   }
 
   const agentId = req.body?.agent_id || "unknown";
+  if (asset.assigned_to && !agentId.startsWith(asset.assigned_to)) {
+    return res.status(403).json({ error: `Task assigned to "${asset.assigned_to}" only` });
+  }
   state.claimedBy = agentId;
   asset.content = { type: "task", data: JSON.stringify(state) };
 
@@ -1206,6 +1210,13 @@ app.patch("/api/task/:station", requireAuth, stateLimiter, (req, res) => {
   }
   if (typeof req.body.task_public === "boolean") {
     asset.task_public = req.body.task_public;
+  }
+  if (req.body.assigned_to !== undefined) {
+    if (req.body.assigned_to === null || req.body.assigned_to === "") {
+      delete asset.assigned_to;
+    } else if (typeof req.body.assigned_to === "string") {
+      asset.assigned_to = req.body.assigned_to.slice(0, 100);
+    }
   }
 
   broadcast({ type: "property_update", property: currentProperty });
@@ -1335,6 +1346,127 @@ function handleInboxDelete(req, res) {
 }
 app.delete("/api/inbox", requireAuth, stateLimiter, handleInboxDelete);
 app.delete("/api/inbox/:name", requireAuth, stateLimiter, handleInboxDelete);
+
+// DELETE /api/inbox/:name/:id — delete a single message by id
+function handleInboxDeleteOne(req, res) {
+  const asset = findInbox(req.params.name);
+  if (!asset) return res.status(404).json({ error: `No inbox "${req.params.name}" found` });
+
+  let messages = [];
+  try {
+    if (asset.content?.data) messages = JSON.parse(asset.content.data);
+    if (!Array.isArray(messages)) messages = [];
+  } catch { messages = []; }
+
+  const before = messages.length;
+  messages = messages.filter(m => m.id !== req.params.id);
+  if (messages.length === before) return res.status(404).json({ error: "Message not found" });
+
+  asset.content = { type: "json", data: JSON.stringify(messages), publishedAt: new Date().toISOString() };
+  broadcast({ type: "property_update", property: currentProperty });
+  savePropertyToDisk().catch(e => console.error("[hub] Failed to save property:", e));
+  res.json({ ok: true, remaining: messages.length });
+}
+app.delete("/api/inbox/:name/:id", requireAuth, stateLimiter, handleInboxDeleteOne);
+
+// POST /api/inbox/:name/:id/process — process an inbox message to a task station (card travel)
+app.post("/api/inbox/:name/:id/process", requireAuth, stateLimiter, (req, res) => {
+  const validation = schemas.processInboxSchema.safeParse(req.body);
+  if (!validation.success) return res.status(400).json({ error: validation.error.issues[0].message });
+
+  const asset = findInbox(req.params.name);
+  if (!asset) return res.status(404).json({ error: `No inbox "${req.params.name}" found` });
+
+  let messages = [];
+  try {
+    if (asset.content?.data) messages = JSON.parse(asset.content.data);
+    if (!Array.isArray(messages)) messages = [];
+  } catch { messages = []; }
+
+  const msgIdx = messages.findIndex(m => m.id === req.params.id);
+  if (msgIdx === -1) return res.status(404).json({ error: "Message not found" });
+
+  const { target_station } = validation.data;
+  const taskAsset = currentProperty?.assets?.find(a => a.station === target_station && a.task);
+  if (!taskAsset) return res.status(404).json({ error: `Task station "${target_station}" not found` });
+
+  let taskState = { status: "idle", result: null };
+  try { if (taskAsset.content?.data) taskState = JSON.parse(taskAsset.content.data); } catch {}
+  if (taskState.status !== "idle") return res.status(409).json({ error: "Task station is busy" });
+
+  const msg = messages[msgIdx];
+  const cardId = `card_${Math.random().toString(36).slice(2, 8)}`;
+
+  // Remove message from inbox
+  messages.splice(msgIdx, 1);
+  asset.content = { type: "json", data: JSON.stringify(messages), publishedAt: new Date().toISOString() };
+
+  // Set task to pending with card
+  taskState.status = "pending";
+  taskState.result = null;
+  taskState.claimedBy = null;
+  taskState.startedAt = new Date().toISOString();
+  taskState.prompt = `Process inbox message from ${msg.from}: ${msg.text}`;
+  taskState.card = { id: cardId, from: msg.from, text: msg.text, timestamp: msg.timestamp, source: "inbox" };
+  taskAsset.content = { type: "task", data: JSON.stringify(taskState) };
+
+  // Fire signal for task station
+  broadcast({ type: "signal", station: target_station, trigger: "manual", timestamp: Date.now(), payload: { station: target_station, instructions: taskAsset.instructions } });
+
+  // Broadcast card travel animation
+  const fromPos = asset.position || { x: 0, y: 0 };
+  const toPos = taskAsset.position || { x: 0, y: 0 };
+  broadcast({ type: "card_travel", card_id: cardId, from_pos: fromPos, to_pos: toPos });
+
+  broadcast({ type: "property_update", property: currentProperty });
+  savePropertyToDisk().catch(e => console.error("[hub] Failed to save property:", e));
+  console.log(`[hub] Inbox "${asset.station}" → task "${target_station}" (card ${cardId})`);
+  res.json({ ok: true, card_id: cardId });
+});
+
+// POST /api/archive/:station — archive a completed card from a task station
+app.post("/api/archive/:station", requireAuth, stateLimiter, (req, res) => {
+  const station = req.params.station;
+  const taskAsset = currentProperty?.assets?.find(a => a.station === station && a.task);
+  if (!taskAsset) return res.status(404).json({ error: `Task station "${station}" not found` });
+
+  let taskState = { status: "idle", result: null };
+  try { if (taskAsset.content?.data) taskState = JSON.parse(taskAsset.content.data); } catch {}
+  if (taskState.status !== "done" || !taskState.card) {
+    return res.status(409).json({ error: "Task must be done with a card to archive" });
+  }
+
+  const archiveAsset = currentProperty?.assets?.find(a => a.archive);
+  if (!archiveAsset) return res.status(404).json({ error: "No archive station found on property" });
+
+  // Push completed card to archive
+  let archiveData = [];
+  try {
+    if (archiveAsset.content?.data) archiveData = JSON.parse(archiveAsset.content.data);
+    if (!Array.isArray(archiveData)) archiveData = [];
+  } catch { archiveData = []; }
+
+  archiveData.unshift({
+    ...taskState.card,
+    result: taskState.result,
+    completedAt: taskState.completedAt || new Date().toISOString(),
+  });
+  while (archiveData.length > 200) archiveData.pop();
+  archiveAsset.content = { type: "json", data: JSON.stringify(archiveData), publishedAt: new Date().toISOString() };
+
+  // Clear task to idle
+  taskAsset.content = { type: "task", data: JSON.stringify({ status: "idle", result: null }) };
+
+  // Broadcast card travel animation
+  const fromPos = taskAsset.position || { x: 0, y: 0 };
+  const toPos = archiveAsset.position || { x: 0, y: 0 };
+  broadcast({ type: "card_travel", card_id: taskState.card.id, from_pos: fromPos, to_pos: toPos });
+
+  broadcast({ type: "property_update", property: currentProperty });
+  savePropertyToDisk().catch(e => console.error("[hub] Failed to save property:", e));
+  console.log(`[hub] Archived card from "${station}" to archive`);
+  res.json({ ok: true });
+});
 
 // --- Remote board proxy (feature-flagged) ---
 function requireRemoteBoard(_req, res, next) {
