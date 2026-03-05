@@ -43,7 +43,14 @@ export default function agentRoutes(ctx) {
     }
 
     const isNewAgent = !agents.has(agent_id);
+    const prev = agents.get(agent_id);
+    const isIdentical = prev && prev.state === entry.state && prev.detail === entry.detail && prev.agent_name === entry.agent_name && prev.sprite === entry.sprite;
     agents.set(agent_id, entry);
+
+    // Silent keepalive — same state, just refresh last_seen without broadcasting
+    if (isIdentical && !note) {
+      return res.json({ ok: true });
+    }
 
     // Station logging
     const currentProperty = getProperty();
