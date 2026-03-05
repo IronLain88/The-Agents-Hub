@@ -547,7 +547,7 @@ function drawPropertyTiles() {
 
 function drawFloatingIcon(cx, topY, icon, count, badgeColor) {
   const bob = Math.sin(animTime * 2.5) * 2;
-  const iy = topY - 10 + bob;
+  const iy = topY - 2 + bob;
   ctx.save();
   ctx.font = '10px sans-serif';
   ctx.textAlign = 'center';
