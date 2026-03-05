@@ -545,78 +545,69 @@ function drawPropertyTiles() {
   }
 }
 
+function drawFloatingIcon(cx, topY, icon, count, badgeColor) {
+  const bob = Math.sin(animTime * 2.5) * 2;
+  const iy = topY - 10 + bob;
+  ctx.save();
+  ctx.font = '10px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'bottom';
+  ctx.fillText(icon, cx, iy);
+  if (count > 0) {
+    const bx = cx + 6;
+    const by = iy - 9;
+    ctx.fillStyle = badgeColor || '#e33';
+    ctx.beginPath();
+    ctx.arc(bx, by, 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 6px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(count > 99 ? '99+' : String(count), bx, by);
+  }
+  ctx.restore();
+}
+
 function drawAssetIndicators(asset, propX, propY) {
   if (!asset.position) return;
   const w = asset.width || 1;
+  const h = asset.height || 1;
   const px = propX + asset.position.x * TILE_SIZE;
   const py = propY + asset.position.y * TILE_SIZE;
   const pw = w * TILE_SIZE;
+  const ph = h * TILE_SIZE;
+  const cx = px + pw / 2;
 
-  // Welcome board: subtle green glow when content set
+  // Welcome board: floating icon when content set
   if (asset.welcome) {
-    if (asset.content?.data) {
-      const pulse = 0.12 + 0.08 * Math.sin(animTime * 2);
-      ctx.fillStyle = `rgba(80, 220, 120, ${pulse})`;
-      ctx.fillRect(px, py, pw, TILE_SIZE);
-    }
+    if (asset.content?.data) drawFloatingIcon(cx, py, '📋', 0);
     return;
   }
 
-  // Archive: warm gold pulse + count badge
+  // Archive: floating icon + count badge
   if (asset.archive && asset.content?.data) {
     let cards = [];
     try {
       const d = typeof asset.content.data === 'string' ? JSON.parse(asset.content.data) : asset.content.data;
       if (Array.isArray(d)) cards = d;
     } catch {}
-    if (cards.length) {
-      const pulse = 0.15 + 0.1 * Math.sin(animTime * 2);
-      ctx.fillStyle = `rgba(240, 216, 136, ${pulse})`;
-      ctx.fillRect(px, py, pw, TILE_SIZE);
-      // Count badge
-      const bx = px + pw - 4;
-      const by = py + 4;
-      ctx.fillStyle = '#c8a84e';
-      ctx.beginPath();
-      ctx.arc(bx, by, 5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#1a1a1a';
-      ctx.font = 'bold 7px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(cards.length > 99 ? '99+' : String(cards.length), bx, by);
-    }
+    if (cards.length) drawFloatingIcon(cx, py, '📦', cards.length, '#c8a84e');
     return;
   }
 
-  // Inbox: pulsing glow + count badge
+  // Inbox: floating icon + count badge
   if (asset.station === 'inbox' && asset.content?.data) {
     let msgs = [];
     try {
       const d = typeof asset.content.data === 'string' ? JSON.parse(asset.content.data) : asset.content.data;
       if (Array.isArray(d)) msgs = d;
     } catch {}
-    if (msgs.length) {
-      const pulse = 0.25 + 0.15 * Math.sin(animTime * 3);
-      ctx.fillStyle = `rgba(255, 215, 0, ${pulse})`;
-      ctx.fillRect(px, py, pw, TILE_SIZE);
-      // Red badge top-right
-      const bx = px + pw - 4;
-      const by = py + 4;
-      ctx.fillStyle = '#e33';
-      ctx.beginPath();
-      ctx.arc(bx, by, 5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#fff';
-      ctx.font = 'bold 7px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(msgs.length > 99 ? '99+' : String(msgs.length), bx, by);
-    }
+    if (msgs.length) drawFloatingIcon(cx, py, '📬', msgs.length, '#e33');
     return;
   }
 
-  // Task station: pulsing glow based on state
+  // Task station: floating icon based on state
   if (asset.task) {
     let status = 'idle';
     try {
@@ -626,32 +617,20 @@ function drawAssetIndicators(asset, propX, propY) {
     const key = `${asset.position.x},${asset.position.y}`;
     const hasAgent = stationOccupants.has(key);
     if (status === 'pending') {
-      const pulse = 0.2 + 0.15 * Math.sin(animTime * 4);
-      ctx.fillStyle = asset.openclaw_task
-        ? `rgba(80, 180, 255, ${pulse})`
-        : `rgba(255, 200, 50, ${pulse})`;
-      ctx.fillRect(px, py, pw, TILE_SIZE);
-    } else if (hasAgent && status === 'idle') {
-      const pulse = 0.15 + 0.1 * Math.sin(animTime * 2);
-      ctx.fillStyle = `rgba(80, 220, 120, ${pulse})`;
-      ctx.fillRect(px, py, pw, TILE_SIZE);
+      drawFloatingIcon(cx, py, asset.openclaw_task ? '🔵' : '❗', 0);
     } else if (status === 'done') {
-      const pulse = 0.2 + 0.15 * Math.sin(animTime * 3);
-      ctx.fillStyle = `rgba(80, 220, 120, ${pulse})`;
-      ctx.fillRect(px, py, pw, TILE_SIZE);
+      drawFloatingIcon(cx, py, '✅', 0);
+    } else if (hasAgent && status === 'idle') {
+      drawFloatingIcon(cx, py, '🟢', 0);
     } else if (asset.openclaw_task && status === 'idle') {
-      // openclaw_task always shows a subtle ready glow (no agent needed)
-      const pulse = 0.1 + 0.05 * Math.sin(animTime * 2);
-      ctx.fillStyle = `rgba(80, 180, 255, ${pulse})`;
-      ctx.fillRect(px, py, pw, TILE_SIZE);
+      drawFloatingIcon(cx, py, '🔹', 0);
     }
     return;
   }
 
   // Signal indicator
   if (asset.trigger) {
-    const cx = px + pw / 2;
-    const cy = py + TILE_SIZE / 2;
+    const cy = py + ph / 2;
 
     if (asset.trigger === 'manual') {
       // Manual: static dot, expanding ring only when recently fired
