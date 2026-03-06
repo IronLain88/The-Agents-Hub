@@ -1467,7 +1467,7 @@ function renderPropertySummary(container) {
     const label = document.createElement('div');
     label.className = 'text-muted';
     label.style.fontSize = '11px';
-    label.textContent = 'Inbox — send messages to agents:';
+    label.textContent = 'Inbox — add messages for agents:';
     sec.appendChild(label);
     const val = document.createElement('div');
     val.style.cssText = 'font-size:12px;padding:2px 0;';
@@ -1669,14 +1669,39 @@ function showArchive(asset) {
       card.style.cssText = 'border-left:3px solid #f0d888;border-radius:6px;padding:8px;background:linear-gradient(135deg,rgba(30,25,15,0.6),rgba(0,0,0,0.2));';
 
       const header = document.createElement('div');
-      header.style.cssText = 'display:flex;justify-content:space-between;font-size:11px;color:#aaa;margin-bottom:4px;';
+      header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;font-size:11px;color:#aaa;margin-bottom:4px;';
       const from = document.createElement('span');
       from.style.cssText = 'font-weight:bold;color:#f0d888;';
       from.textContent = '\u2709\ufe0f ' + (c.from || 'Unknown');
+      const headerRight = document.createElement('span');
+      headerRight.style.cssText = 'display:flex;align-items:center;gap:6px;';
       const time = document.createElement('span');
       time.textContent = c.completedAt ? new Date(c.completedAt).toLocaleString() : '';
+      const delBtn = document.createElement('button');
+      delBtn.textContent = '✕';
+      delBtn.title = 'Delete card';
+      delBtn.style.cssText = 'background:none;border:none;color:#888;cursor:pointer;font-size:13px;padding:0 2px;line-height:1;';
+      delBtn.onmouseenter = () => delBtn.style.color = '#e55';
+      delBtn.onmouseleave = () => delBtn.style.color = '#888';
+      delBtn.onclick = async () => {
+        delBtn.disabled = true;
+        // Recalculate index from current DOM order
+        const currentCards = [...list.children];
+        const idx = currentCards.indexOf(card);
+        if (idx === -1) return;
+        try {
+          const res = await fetch(`${HUB_HTTP_URL}/api/archive/${idx}`, {
+            method: 'DELETE',
+            headers: CONFIG.apiKey ? { Authorization: `Bearer ${CONFIG.apiKey}` } : {},
+          });
+          if (res.ok) card.remove();
+        } catch { /* ignore */ }
+        delBtn.disabled = false;
+      };
+      headerRight.appendChild(time);
+      headerRight.appendChild(delBtn);
       header.appendChild(from);
-      header.appendChild(time);
+      header.appendChild(headerRight);
 
       const text = document.createElement('div');
       text.style.cssText = 'font-size:12px;white-space:pre-wrap;word-break:break-word;margin-bottom:6px;';
@@ -1823,11 +1848,11 @@ function showInboxMessages(asset) {
     form.className = 'inline-row';
     const input = document.createElement('input');
     input.type = 'text';
-    input.placeholder = 'Send a message...';
+    input.placeholder = 'Add a message...';
     input.maxLength = 2000;
     input.className = 'form-input';
     const btn = document.createElement('button');
-    btn.textContent = 'Send';
+    btn.textContent = 'Add';
     btn.className = 'btn btn-primary';
     btn.onclick = async () => {
       const text = input.value.trim();
@@ -2338,7 +2363,7 @@ function showTask(asset) {
 
     const canRerun = isOpen || isOcTask;
     const clearBtn = document.createElement('button');
-    clearBtn.textContent = canRerun ? 'Run again' : 'Clear results';
+    clearBtn.textContent = canRerun ? 'Accept' : 'Clear results';
     clearBtn.className = `btn ${canRerun ? 'btn-primary' : 'btn-danger'}`;
     clearBtn.onclick = async () => {
       clearBtn.disabled = true;
