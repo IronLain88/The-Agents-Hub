@@ -70,7 +70,9 @@ const POSE_SPRITES = {
   run: "_run.png",
 };
 
-var { TILE_SIZE, GRID_W, GRID_H, collectStations, resolveStation, buildCollisionMap, findPath, simplifyPath } = StationLogic;
+var { TILE_SIZE, DEFAULT_GRID_W, DEFAULT_GRID_H, collectStations, resolveStation, buildCollisionMap, findPath, simplifyPath } = StationLogic;
+function gridW() { return property?.width || DEFAULT_GRID_W; }
+function gridH() { return property?.height || DEFAULT_GRID_H; }
 const LERP_SPEED = 8;
 const ANIM_FPS = 6;
 const BUBBLE_PAD = 8;
@@ -218,10 +220,10 @@ function applyPropertyData(propData) {
 // --- Station Routing ---
 
 function getTargetPosition(agentId, data) {
-  if (!property) return { x: GRID_W * TILE_SIZE / 2, y: GRID_H * TILE_SIZE / 2, facing: "down", pose: "idle" };
+  if (!property) return { x: gridW() * TILE_SIZE / 2, y: gridH() * TILE_SIZE / 2, facing: "down", pose: "idle" };
 
   const state = data.state || "idle";
-  const fallback = { x: GRID_W * TILE_SIZE / 2, y: GRID_H * TILE_SIZE / 2, facing: "down", pose: "idle" };
+  const fallback = { x: gridW() * TILE_SIZE / 2, y: gridH() * TILE_SIZE / 2, facing: "down", pose: "idle" };
 
   const allStations = collectStations(property);
   if (!allStations.length) return fallback;
@@ -479,14 +481,14 @@ function handleAgentUpdate(agentId, data) {
 function drawPropertyTiles() {
   if (!property) {
     ctx.fillStyle = "rgba(255,255,255,0.05)";
-    ctx.fillRect(0, 0, GRID_W * TILE_SIZE, GRID_H * TILE_SIZE);
+    ctx.fillRect(0, 0, gridW() * TILE_SIZE, gridH() * TILE_SIZE);
     ctx.strokeStyle = "rgba(255,255,255,0.15)";
     ctx.lineWidth = 1;
-    ctx.strokeRect(0, 0, GRID_W * TILE_SIZE, GRID_H * TILE_SIZE);
+    ctx.strokeRect(0, 0, gridW() * TILE_SIZE, gridH() * TILE_SIZE);
     ctx.fillStyle = "#666";
     ctx.font = "10px monospace";
     ctx.textAlign = "center";
-    ctx.fillText("No property configured", GRID_W * TILE_SIZE / 2, GRID_H * TILE_SIZE / 2);
+    ctx.fillText("No property configured", gridW() * TILE_SIZE / 2, gridH() * TILE_SIZE / 2);
     return;
   }
 
@@ -1018,8 +1020,8 @@ function centerCamera() {
   const cssW = canvas.clientWidth || canvas.width;
   const cssH = canvas.clientHeight || canvas.height;
   if (cssW > 0 && cssH > 0) {
-    const worldW = GRID_W * TILE_SIZE;
-    const worldH = GRID_H * TILE_SIZE;
+    const worldW = gridW() * TILE_SIZE;
+    const worldH = gridH() * TILE_SIZE;
     camera.x = -worldW / 2;
     camera.y = -worldH / 2;
     const zoomX = cssW / worldW;
@@ -1325,8 +1327,205 @@ async function processInboxMessage(target, messageText, sender, btn) {
   btn.disabled = false;
 }
 
+function buildPropertySummary() {
+  const assets = property?.assets || [];
+  const ownerName = property?.owner_name || 'Unknown';
+  const stations = [];
+  const tasks = [];
+  const signals = [];
+  const receptions = [];
+  let hasInbox = false;
+
+  for (const a of assets) {
+    if (!a.station) continue;
+    if (a.task) {
+      tasks.push({ name: a.station, instructions: a.instructions || null, openclaw: !!a.openclaw_task });
+    } else if (a.reception) {
+      receptions.push(a.station);
+    } else if (a.trigger) {
+      signals.push({ name: a.station, trigger: a.trigger, interval: a.trigger_interval });
+    } else if (a.station.startsWith('inbox')) {
+      hasInbox = true;
+    } else if (!a.welcome && !a.archive && !a.logger) {
+      stations.push(a.station);
+    }
+  }
+
+  const activeAgents = [];
+  for (const [, ag] of agents) {
+    if (ag.parent_agent_id) continue;
+    activeAgents.push({ name: ag.agent_name, state: ag.state, detail: ag.detail });
+  }
+
+  return { ownerName, stations, tasks, signals, receptions, hasInbox, activeAgents };
+}
+
+function renderPropertySummary(container) {
+  const s = buildPropertySummary();
+
+  const heading = document.createElement('div');
+  heading.style.cssText = 'font-size:12px;margin-bottom:4px;';
+  heading.textContent = `${s.ownerName}'s property`;
+  container.appendChild(heading);
+
+  const intro = document.createElement('div');
+  intro.className = 'text-muted section-mb';
+  intro.style.fontSize = '11px';
+  intro.textContent = 'This is an AI agent workspace. Agents walk to furniture as they work. Click on any piece of furniture to see what it does or interact with it.';
+  container.appendChild(intro);
+
+  // Active agents
+  if (s.activeAgents.length > 0) {
+    const sec = document.createElement('div');
+    sec.className = 'section-mb';
+    const label = document.createElement('div');
+    label.className = 'text-muted';
+    label.style.fontSize = '11px';
+    label.textContent = 'Active agents:';
+    sec.appendChild(label);
+    for (const ag of s.activeAgents) {
+      const line = document.createElement('div');
+      line.style.cssText = 'font-size:12px;padding:2px 0;';
+      line.textContent = `  ${ag.name} — ${ag.state}${ag.detail ? ': ' + ag.detail.slice(0, 60) : ''}`;
+      sec.appendChild(line);
+    }
+    container.appendChild(sec);
+  }
+
+  // Stations
+  if (s.stations.length > 0) {
+    const sec = document.createElement('div');
+    sec.className = 'section-mb';
+    const label = document.createElement('div');
+    label.className = 'text-muted';
+    label.style.fontSize = '11px';
+    label.textContent = 'Stations — places agents walk to for different activities:';
+    sec.appendChild(label);
+    const val = document.createElement('div');
+    val.style.cssText = 'font-size:12px;padding:2px 0;';
+    val.textContent = `  ${s.stations.map(st => st.replace(/_/g, ' ')).join(', ')}`;
+    sec.appendChild(val);
+    container.appendChild(sec);
+  }
+
+  // Tasks
+  if (s.tasks.length > 0) {
+    const sec = document.createElement('div');
+    sec.className = 'section-mb';
+    const label = document.createElement('div');
+    label.className = 'text-muted';
+    label.style.fontSize = '11px';
+    label.textContent = 'Task stations — click these to send a request to an agent:';
+    sec.appendChild(label);
+    for (const t of s.tasks) {
+      const line = document.createElement('div');
+      line.style.cssText = 'font-size:12px;padding:2px 0;';
+      line.textContent = `  ${t.name.replace(/_/g, ' ')}${t.instructions ? ' — ' + t.instructions.slice(0, 50) : ''}${t.openclaw ? ' (auto)' : ''}`;
+      sec.appendChild(line);
+    }
+    container.appendChild(sec);
+  }
+
+  // Receptions
+  if (s.receptions.length > 0) {
+    const sec = document.createElement('div');
+    sec.className = 'section-mb';
+    const label = document.createElement('div');
+    label.className = 'text-muted';
+    label.style.fontSize = '11px';
+    label.textContent = 'Reception desks — ask a question and get an answer:';
+    sec.appendChild(label);
+    const val = document.createElement('div');
+    val.style.cssText = 'font-size:12px;padding:2px 0;';
+    val.textContent = `  ${s.receptions.map(r => r.replace(/_/g, ' ')).join(', ')}`;
+    sec.appendChild(val);
+    container.appendChild(sec);
+  }
+
+  // Signals
+  if (s.signals.length > 0) {
+    const sec = document.createElement('div');
+    sec.className = 'section-mb';
+    const label = document.createElement('div');
+    label.className = 'text-muted';
+    label.style.fontSize = '11px';
+    label.textContent = 'Signals — triggers that tell agents to do something:';
+    sec.appendChild(label);
+    for (const sig of s.signals) {
+      const line = document.createElement('div');
+      line.style.cssText = 'font-size:12px;padding:2px 0;';
+      const name = sig.name.replace(/_/g, ' ');
+      line.textContent = `  ${name}${sig.trigger === 'heartbeat' ? ` (every ${sig.interval || 60}s)` : ' (manual)'}`;
+      sec.appendChild(line);
+    }
+    container.appendChild(sec);
+  }
+
+  if (s.hasInbox) {
+    const sec = document.createElement('div');
+    sec.className = 'section-mb';
+    const label = document.createElement('div');
+    label.className = 'text-muted';
+    label.style.fontSize = '11px';
+    label.textContent = 'Inbox — send messages to agents:';
+    sec.appendChild(label);
+    const val = document.createElement('div');
+    val.style.cssText = 'font-size:12px;padding:2px 0;';
+    val.textContent = '  available';
+    sec.appendChild(val);
+    container.appendChild(sec);
+  }
+
+  if (s.stations.length === 0 && s.tasks.length === 0 && s.signals.length === 0 && s.receptions.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'text-muted';
+    empty.style.fontSize = '12px';
+    empty.textContent = 'No stations configured yet.';
+    container.appendChild(empty);
+  }
+}
+
+function showPropertyInfo() {
+  const existing = document.getElementById('station-modal');
+  if (existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'station-modal';
+  modal.className = 'modal-backdrop';
+
+  const box = document.createElement('div');
+  box.className = 'modal-box scrollable';
+
+  const title = document.createElement('div');
+  title.className = 'modal-title';
+  title.textContent = 'About This Property';
+  box.appendChild(title);
+
+  renderPropertySummary(box);
+
+  const tip = document.createElement('div');
+  tip.className = 'text-muted section-mt';
+  tip.style.fontSize = '11px';
+  tip.textContent = 'Click on any furniture to interact with it.';
+  box.appendChild(tip);
+
+  modal.appendChild(box);
+  const openedAt = Date.now();
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal && Date.now() - openedAt > 400) modal.remove();
+  });
+  document.addEventListener('keydown', function esc(e) {
+    if (e.key === 'Escape') { modal.remove(); document.removeEventListener('keydown', esc); }
+  });
+  document.body.appendChild(modal);
+}
+
 async function showWelcomeBoard(asset) {
   const isAuthed = !!CONFIG.apiKey;
+
+  // Non-authed visitors just see the property info
+  if (!isAuthed) return showPropertyInfo();
+
   let currentText = asset.content?.data || '';
 
   // Fetch default welcome text if no custom content exists
@@ -1349,24 +1548,31 @@ async function showWelcomeBoard(asset) {
 
   const title = document.createElement('div');
   title.className = 'modal-title';
-  title.textContent = '\ud83d\udcdc Welcome Board';
+  title.textContent = 'About This Property';
   box.appendChild(title);
 
-  const desc = document.createElement('div');
-  desc.className = 'text-muted section-mb';
-  desc.style.fontSize = '11px';
-  desc.textContent = 'This message is shown to every agent on connect.';
-  box.appendChild(desc);
+  // Human-readable property summary
+  renderPropertySummary(box);
 
-  const textarea = document.createElement('textarea');
-  textarea.rows = 14;
-  textarea.className = 'form-textarea';
-  textarea.style.cssText = 'width:100%;font-family:monospace;font-size:11px;resize:vertical;';
-  textarea.value = currentText;
-  textarea.readOnly = !isAuthed;
-  box.appendChild(textarea);
-
+  // Divider before agent section
   if (isAuthed) {
+    const divider = document.createElement('hr');
+    divider.style.cssText = 'border:none;border-top:1px solid #333;margin:12px 0;';
+    box.appendChild(divider);
+
+    const agentLabel = document.createElement('div');
+    agentLabel.className = 'text-muted section-mb';
+    agentLabel.style.fontSize = '11px';
+    agentLabel.textContent = 'Agent welcome message (shown to agents on connect):';
+    box.appendChild(agentLabel);
+
+    const textarea = document.createElement('textarea');
+    textarea.rows = 10;
+    textarea.className = 'form-textarea';
+    textarea.style.cssText = 'width:100%;font-family:monospace;font-size:11px;resize:vertical;';
+    textarea.value = currentText;
+    box.appendChild(textarea);
+
     const btnRow = document.createElement('div');
     btnRow.style.cssText = 'display:flex;gap:6px;margin-top:8px;';
 
@@ -1421,7 +1627,6 @@ async function showWelcomeBoard(asset) {
             body: JSON.stringify({ content: { type: 'markdown', data: '' } }),
           });
           textarea.value = '';
-          desc.textContent = 'No custom welcome set — agents see the auto-generated default.';
         } catch {}
         clearBtn.disabled = false;
       };
@@ -2324,8 +2529,51 @@ function showSignalInfo(asset) {
     editableInterval = { station, currentInterval: interval };
   }
 
+  // Copy-paste agent prompt
+  let agentPrompt;
+  if (trigger === 'manual') {
+    agentPrompt = `Subscribe to "${station}" and loop: check_events() → when it fires, do your task → repeat.`;
+  } else {
+    agentPrompt = `Subscribe to "${station}" and loop: check_events() (fires every ${interval}s) → do your periodic task → repeat.`;
+  }
+
   const fireBtn = trigger === 'manual' ? { station } : null;
-  showModal(`🔔 ${station}`, desc, false, setup, editableInterval, asset, null, fireBtn);
+  showModal(`🔔 ${station}`, desc, false, setup, editableInterval, asset, (box) => {
+    const promptWrap = document.createElement('div');
+    promptWrap.className = 'section-mb';
+    const promptLabel = document.createElement('div');
+    promptLabel.className = 'text-muted';
+    promptLabel.style.fontSize = '11px';
+    promptLabel.style.marginBottom = '4px';
+    promptLabel.textContent = 'Paste this into your agent to man this station:';
+    const promptRow = document.createElement('div');
+    promptRow.className = 'settings-row';
+    const promptCode = document.createElement('code');
+    promptCode.className = 'text-info';
+    promptCode.style.flex = '1';
+    promptCode.style.wordBreak = 'break-word';
+    promptCode.textContent = agentPrompt;
+    const copyBtn = document.createElement('button');
+    copyBtn.textContent = 'Copy';
+    copyBtn.className = 'btn btn-accent';
+    copyBtn.onclick = () => {
+      navigator.clipboard.writeText(agentPrompt).then(() => {
+        copyBtn.textContent = '✓ Copied';
+        setTimeout(() => copyBtn.textContent = 'Copy', 2000);
+      });
+    };
+    promptRow.appendChild(promptCode);
+    promptRow.appendChild(copyBtn);
+    promptWrap.appendChild(promptLabel);
+    promptWrap.appendChild(promptRow);
+    // Insert after title, before description
+    const titleEl = box.querySelector('.modal-title');
+    if (titleEl && titleEl.nextSibling) {
+      box.insertBefore(promptWrap, titleEl.nextSibling);
+    } else {
+      box.appendChild(promptWrap);
+    }
+  }, fireBtn);
 }
 
 function showPayloadWarning() {
@@ -2789,7 +3037,8 @@ function showWelcome() {
   box.innerHTML = `
     <div class="modal-title" style="font-size:20px;">Welcome</div>
     <div>This is an agent's workspace.<br>Click furniture to see what's happening.<br>Agents walk to stations as they work.</div>
-    <div class="text-muted section-mt" style="font-size:12px;">Tap anywhere to continue</div>
+    <div class="text-muted section-mt" style="font-size:12px;">Press <strong>?</strong> or click the <strong>?</strong> button anytime for property info.</div>
+    <div class="text-muted" style="font-size:12px;margin-top:4px;">Tap anywhere to continue</div>
   `;
   overlay.appendChild(box);
   document.body.appendChild(overlay);
@@ -2802,15 +3051,27 @@ function showWelcome() {
   document.addEventListener('keydown', dismiss);
 }
 
+function createInfoButton() {
+  const btn = document.createElement('button');
+  btn.id = 'info-btn';
+  btn.className = 'info-btn';
+  btn.textContent = '?';
+  btn.title = 'About this property';
+  btn.onclick = () => showPropertyInfo();
+  document.body.appendChild(btn);
+}
+
 window.addEventListener("resize", resize);
 resize();
 
 document.addEventListener("keydown", (e) => {
   if (e.key === "h" || e.key === "H" || e.key === "Home") centerCamera();
+  if (e.key === "?" && !document.getElementById('station-modal')) showPropertyInfo();
 });
 
 loadAssets().then(() => {
   connect();
   requestAnimationFrame(loop);
   showWelcome();
+  createInfoButton();
 });
