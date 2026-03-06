@@ -1,13 +1,15 @@
 // Shared station-routing logic — pure ES module, zero DOM dependencies
 
 export const TILE_SIZE = 16;
-export const GRID_W = 24;
-export const GRID_H = 32;
+export const DEFAULT_GRID_W = 24;
+export const DEFAULT_GRID_H = 32;
 
 // --- Collision Detection ---
 
 export function buildCollisionMap(propData) {
-  const map = Array(GRID_H).fill(null).map(() => Array(GRID_W).fill(false));
+  const gw = propData?.width || DEFAULT_GRID_W;
+  const gh = propData?.height || DEFAULT_GRID_H;
+  const map = Array(gh).fill(null).map(() => Array(gw).fill(false));
 
   if (!propData) return map;
 
@@ -20,7 +22,7 @@ export function buildCollisionMap(propData) {
       for (let dx = 0; dx < w; dx++) {
         const x = asset.position.x + dx;
         const y = asset.position.y + dy;
-        if (x >= 0 && x < GRID_W && y >= 0 && y < GRID_H) {
+        if (x >= 0 && x < gw && y >= 0 && y < gh) {
           map[y][x] = true;
         }
       }
@@ -29,7 +31,7 @@ export function buildCollisionMap(propData) {
 
   // Absolute collision (painted tiles)
   for (const tile of propData.collision || []) {
-    if (tile.x >= 0 && tile.x < GRID_W && tile.y >= 0 && tile.y < GRID_H) {
+    if (tile.x >= 0 && tile.x < gw && tile.y >= 0 && tile.y < gh) {
       map[tile.y][tile.x] = "absolute"; // Mark as absolute collision
     }
   }
@@ -44,11 +46,13 @@ function heuristic(ax, ay, bx, by) {
 }
 
 export function findPath(collisionMap, startX, startY, targetX, targetY, allowTargetCollision = true, stationBounds = null) {
+  const gh = collisionMap.length;
+  const gw = gh > 0 ? collisionMap[0].length : 0;
   // Clamp to grid
-  startX = Math.floor(Math.max(0, Math.min(GRID_W - 1, startX)));
-  startY = Math.floor(Math.max(0, Math.min(GRID_H - 1, startY)));
-  targetX = Math.floor(Math.max(0, Math.min(GRID_W - 1, targetX)));
-  targetY = Math.floor(Math.max(0, Math.min(GRID_H - 1, targetY)));
+  startX = Math.floor(Math.max(0, Math.min(gw - 1, startX)));
+  startY = Math.floor(Math.max(0, Math.min(gh - 1, startY)));
+  targetX = Math.floor(Math.max(0, Math.min(gw - 1, targetX)));
+  targetY = Math.floor(Math.max(0, Math.min(gh - 1, targetY)));
 
   // If target is blocked and we don't allow target collision, find nearest free tile
   if (!allowTargetCollision && collisionMap[targetY][targetX]) {
@@ -94,7 +98,7 @@ export function findPath(collisionMap, startX, startY, targetX, targetY, allowTa
     ];
 
     for (const neighbor of neighbors) {
-      if (neighbor.x < 0 || neighbor.x >= GRID_W || neighbor.y < 0 || neighbor.y >= GRID_H) continue;
+      if (neighbor.x < 0 || neighbor.x >= gw || neighbor.y < 0 || neighbor.y >= gh) continue;
       if (closedSet.has(`${neighbor.x},${neighbor.y}`)) continue;
 
       const collision = collisionMap[neighbor.y][neighbor.x];
@@ -161,13 +165,15 @@ export function simplifyPath(path) {
 }
 
 function findNearestFreeTile(collisionMap, tx, ty) {
-  for (let radius = 1; radius < Math.max(GRID_W, GRID_H); radius++) {
+  const gh = collisionMap.length;
+  const gw = gh > 0 ? collisionMap[0].length : 0;
+  for (let radius = 1; radius < Math.max(gw, gh); radius++) {
     for (let dy = -radius; dy <= radius; dy++) {
       for (let dx = -radius; dx <= radius; dx++) {
         if (Math.abs(dx) !== radius && Math.abs(dy) !== radius) continue;
         const x = tx + dx;
         const y = ty + dy;
-        if (x >= 0 && x < GRID_W && y >= 0 && y < GRID_H && !collisionMap[y][x]) {
+        if (x >= 0 && x < gw && y >= 0 && y < gh && !collisionMap[y][x]) {
           return { x, y };
         }
       }

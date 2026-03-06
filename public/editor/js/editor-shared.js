@@ -1,8 +1,8 @@
 // Shared editor utilities — tileset loading, grid drawing, hub API, station colors
 
 export const TILE_SIZE = 16;
-export const GRID_W = 24;
-export const GRID_H = 32;
+export const DEFAULT_GRID_W = 24;
+export const DEFAULT_GRID_H = 32;
 
 export let TILESET_URIS = {};
 
@@ -133,19 +133,19 @@ export function drawFrame(ctx, dx, dy, w, h, p, style) {
 
 // --- Grid drawing ---
 
-export function drawGrid(ctx, zoom) {
+export function drawGrid(ctx, zoom, gw = DEFAULT_GRID_W, gh = DEFAULT_GRID_H) {
 	ctx.strokeStyle = "rgba(255,255,255,0.1)";
 	ctx.lineWidth = 1 / zoom;
-	for (let x = 0; x <= GRID_W; x++) {
+	for (let x = 0; x <= gw; x++) {
 		ctx.beginPath();
 		ctx.moveTo(x * TILE_SIZE, 0);
-		ctx.lineTo(x * TILE_SIZE, GRID_H * TILE_SIZE);
+		ctx.lineTo(x * TILE_SIZE, gh * TILE_SIZE);
 		ctx.stroke();
 	}
-	for (let y = 0; y <= GRID_H; y++) {
+	for (let y = 0; y <= gh; y++) {
 		ctx.beginPath();
 		ctx.moveTo(0, y * TILE_SIZE);
-		ctx.lineTo(GRID_W * TILE_SIZE, y * TILE_SIZE);
+		ctx.lineTo(gw * TILE_SIZE, y * TILE_SIZE);
 		ctx.stroke();
 	}
 }
@@ -316,6 +316,6 @@ export function screenToGrid(mx, my, camera) {
 	return { x: Math.floor(wx / TILE_SIZE), y: Math.floor(wy / TILE_SIZE) };
 }
 
-export function inBounds(gx, gy) {
-	return gx >= 0 && gx < GRID_W && gy >= 0 && gy < GRID_H;
+export function inBounds(gx, gy, gw = DEFAULT_GRID_W, gh = DEFAULT_GRID_H) {
+	return gx >= 0 && gx < gw && gy >= 0 && gy < gh;
 }

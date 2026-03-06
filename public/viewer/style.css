@@ -172,6 +172,32 @@ body {
   color: #fcc;
 }
 
+/* --- Info Button --- */
+
+.info-btn {
+  position: fixed;
+  bottom: 12px;
+  right: 12px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid #3a5a3a;
+  background: rgba(20, 40, 20, 0.85);
+  color: #66bb46;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  z-index: 10;
+  backdrop-filter: blur(4px);
+  line-height: 1;
+  padding: 0;
+}
+
+.info-btn:hover {
+  background: rgba(40, 80, 40, 0.9);
+  border-color: #66bb46;
+}
+
 /* --- Modal Backdrop --- */
 
 .modal-backdrop {

@@ -1,5 +1,5 @@
 import {
-	TILE_SIZE, GRID_W, GRID_H, STATION_COLORS,
+	TILE_SIZE, DEFAULT_GRID_W, DEFAULT_GRID_H, STATION_COLORS,
 	loadTilesets, getTilesetImage, loadAnimatedImage, getAnimatedImage, loadCutoutImage, loadImageAsset,
 	drawGrid, drawTileLayer, drawAsset, drawStationOverlay,
 	loadProperty, saveProperty, loadTileCatalog, loadAnimatedFiles,
@@ -27,8 +27,8 @@ let showCollision = false;
 
 const property = {
 	version: 2,
-	width: GRID_W,
-	height: GRID_H,
+	width: DEFAULT_GRID_W,
+	height: DEFAULT_GRID_H,
 	floor: [],
 	assets: [],
 	collision: [], // Absolute collision tiles: [{ x, y }, ...]
@@ -183,13 +183,33 @@ document.getElementById("toggle-collision").onclick = () => {
 	document.getElementById("toggle-collision").textContent = showCollision ? "Hide Collision" : "Show Collision";
 };
 
+const gridWInput = document.getElementById("grid-w");
+const gridHInput = document.getElementById("grid-h");
+gridWInput.value = property.width;
+gridHInput.value = property.height;
+
+document.getElementById("btn-resize").onclick = () => {
+	const newW = Math.max(1, Math.min(100, parseInt(gridWInput.value) || property.width));
+	const newH = Math.max(1, Math.min(100, parseInt(gridHInput.value) || property.height));
+	property.width = newW;
+	property.height = newH;
+	gridWInput.value = newW;
+	gridHInput.value = newH;
+	centerCamera();
+	statusEl.textContent = `Resized to ${newW}×${newH}`;
+};
+
+function syncSizeInputs() {
+	gridWInput.value = property.width;
+	gridHInput.value = property.height;
+}
 
 function applyProperty(data) {
 	property.floor = data.floor || data.ground || [];
 	property.assets = data.assets || [];
 	property.collision = data.collision || [];
-	property.width = data.width || GRID_W;
-	property.height = data.height || GRID_H;
+	property.width = data.width || DEFAULT_GRID_W;
+	property.height = data.height || DEFAULT_GRID_H;
 	// preload animated, cutout, and image assets
 	for (const asset of property.assets) {
 		if (asset.sprite?.file) loadAnimatedImage(asset.sprite.file);
@@ -198,6 +218,7 @@ function applyProperty(data) {
 	}
 	selectedAssetIndex = -1;
 	hideSelectInfo();
+	syncSizeInputs();
 }
 
 // --- Palette ---
@@ -688,7 +709,7 @@ canvas.addEventListener("pointerdown", (e) => {
 
 	// Right click = erase
 	if (e.button === 2) {
-		if (inBounds(grid.x, grid.y)) eraseAt(grid.x, grid.y);
+		if (inBounds(grid.x, grid.y, property.width, property.height)) eraseAt(grid.x, grid.y);
 		painting = true;
 		canvas.setPointerCapture(e.pointerId);
 		return;
@@ -710,7 +731,7 @@ canvas.addEventListener("pointerdown", (e) => {
 			paintAt(grid.x, grid.y);
 			painting = true;
 		} else if (tool === "erase") {
-			if (inBounds(grid.x, grid.y)) eraseAt(grid.x, grid.y);
+			if (inBounds(grid.x, grid.y, property.width, property.height)) eraseAt(grid.x, grid.y);
 			painting = true;
 		}
 		canvas.setPointerCapture(e.pointerId);
@@ -726,7 +747,7 @@ canvas.addEventListener("pointermove", (e) => {
 	if (!painting) return;
 	const rect = canvas.getBoundingClientRect();
 	const grid = screenToGrid(e.clientX - rect.left, e.clientY - rect.top, camera);
-	if (!inBounds(grid.x, grid.y)) return;
+	if (!inBounds(grid.x, grid.y, property.width, property.height)) return;
 
 	if (tool === "paint" && selectedPalette && selectedPalette._category === "Floors") {
 		paintAt(grid.x, grid.y);
@@ -743,7 +764,7 @@ canvas.addEventListener("contextmenu", (e) => e.preventDefault());
 // --- Paint / Erase ---
 
 function paintAt(gx, gy) {
-	if (!inBounds(gx, gy)) return;
+	if (!inBounds(gx, gy, property.width, property.height)) return;
 
 	if (showCollision && !selectedPalette) {
 		// Paint absolute collision tile
@@ -917,10 +938,10 @@ function selectAt(gx, gy) {
 // --- Rendering ---
 
 function centerCamera() {
-	camera.x = -(GRID_W * TILE_SIZE) / 2;
-	camera.y = -(GRID_H * TILE_SIZE) / 2;
-	const zoomX = camera.canvasW / (GRID_W * TILE_SIZE);
-	const zoomY = camera.canvasH / (GRID_H * TILE_SIZE);
+	camera.x = -(property.width * TILE_SIZE) / 2;
+	camera.y = -(property.height * TILE_SIZE) / 2;
+	const zoomX = camera.canvasW / (property.width * TILE_SIZE);
+	const zoomY = camera.canvasH / (property.height * TILE_SIZE);
 	camera.zoom = Math.max(0.5, Math.min(10, Math.min(zoomX, zoomY) * 0.9));
 }
 
@@ -945,7 +966,7 @@ function render() {
 
 	// Background
 	ctx.fillStyle = "rgba(255,255,255,0.03)";
-	ctx.fillRect(0, 0, GRID_W * TILE_SIZE, GRID_H * TILE_SIZE);
+	ctx.fillRect(0, 0, property.width * TILE_SIZE, property.height * TILE_SIZE);
 
 	// Floor
 	drawTileLayer(ctx, property.floor);
@@ -1006,7 +1027,7 @@ function render() {
 	}
 
 	// Grid
-	drawGrid(ctx, camera.zoom);
+	drawGrid(ctx, camera.zoom, property.width, property.height);
 
 	ctx.restore();
 	requestAnimationFrame(render);
