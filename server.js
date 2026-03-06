@@ -313,6 +313,7 @@ function buildDefaultWelcomeText() {
     "You have a property — a tile grid with furniture. Each furniture piece can be tagged with a **station** name.",
     "When you call `update_state({ state, detail })`, your character walks to the matching station.",
     "Update state at EVERY transition. Set idle when done.",
+    "Use `say({ text })` to update your speech bubble without changing state or moving.",
     "",
     "## Your Property",
     `**Stations:** ${w.stations.join(", ") || "none"}`,
