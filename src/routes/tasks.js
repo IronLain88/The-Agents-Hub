@@ -69,7 +69,7 @@ export default function taskRoutes(ctx) {
     }
 
     const agentId = req.body?.agent_id || "unknown";
-    if (asset.assigned_to && !agentId.startsWith(asset.assigned_to)) {
+    if (asset.assigned_to && !agentId.toLowerCase().startsWith(asset.assigned_to.toLowerCase())) {
       return res.status(403).json({ error: `Task assigned to "${asset.assigned_to}" only` });
     }
     state.claimedBy = agentId;

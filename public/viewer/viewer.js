@@ -2213,8 +2213,8 @@ function showTask(asset) {
     box.appendChild(descWrap);
   }
 
-  // Assigned-to setting (authed only)
-  if (CONFIG.apiKey) {
+  // Assigned-to setting (openclaw stations only, authed only)
+  if (CONFIG.apiKey && asset.openclaw_task) {
     const assignWrap = document.createElement('div');
     assignWrap.className = 'section-mb';
     const assignLabel = document.createElement('div');
