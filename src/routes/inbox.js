@@ -180,5 +180,29 @@ export default function inboxRoutes(ctx) {
     res.json({ ok: true });
   });
 
+  // DELETE /api/archive/:index — delete a single archived card by index
+  router.delete("/api/archive/:index", requireAuth, stateLimiter, (req, res) => {
+    const idx = parseInt(req.params.index, 10);
+    if (isNaN(idx) || idx < 0) return res.status(400).json({ error: "Invalid index" });
+
+    const currentProperty = getProperty();
+    const archiveAsset = currentProperty?.assets?.find(a => a.archive);
+    if (!archiveAsset) return res.status(404).json({ error: "No archive station found" });
+
+    let archiveData = [];
+    try {
+      if (archiveAsset.content?.data) archiveData = JSON.parse(archiveAsset.content.data);
+      if (!Array.isArray(archiveData)) archiveData = [];
+    } catch { archiveData = []; }
+
+    if (idx >= archiveData.length) return res.status(404).json({ error: "Card not found" });
+
+    archiveData.splice(idx, 1);
+    archiveAsset.content = { type: "json", data: JSON.stringify(archiveData), publishedAt: new Date().toISOString() };
+    broadcast({ type: "property_update", property: currentProperty });
+    savePropertyToDisk().catch(e => console.error("[hub] Failed to save property:", e));
+    res.json({ ok: true, remaining: archiveData.length });
+  });
+
   return router;
 }

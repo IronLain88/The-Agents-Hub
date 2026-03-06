@@ -313,6 +313,7 @@ function buildDefaultWelcomeText() {
     "You have a property — a tile grid with furniture. Each furniture piece can be tagged with a **station** name.",
     "When you call `update_state({ state, detail })`, your character walks to the matching station.",
     "Update state at EVERY transition. Set idle when done.",
+    "Use `say({ text })` to update your speech bubble without changing state or moving.",
     "",
     "## Your Property",
     `**Stations:** ${w.stations.join(", ") || "none"}`,
@@ -321,7 +322,7 @@ function buildDefaultWelcomeText() {
   if (w.tasks.length > 0) {
     lines.push(`**Task stations (interactive — visitors trigger these, you do the work):**`);
     for (const t of w.tasks) lines.push(`  - ${t}`);
-    lines.push(`*Workflow: subscribe({name}) → check_events() (blocks until triggered) → do the work → answer_task({station, result}) → check_events() again*`);
+    lines.push(`*Workflow: subscribe() → check_events() (blocks until triggered) → do the work → answer_task({station, result}) → check_events() again*`);
   }
   if (w.openclawTasks.length > 0) {
     lines.push(`**OpenClaw task stations (auto-spawn — do NOT call work_task on these):**`);

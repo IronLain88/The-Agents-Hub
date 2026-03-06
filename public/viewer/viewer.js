@@ -1467,7 +1467,7 @@ function renderPropertySummary(container) {
     const label = document.createElement('div');
     label.className = 'text-muted';
     label.style.fontSize = '11px';
-    label.textContent = 'Inbox — send messages to agents:';
+    label.textContent = 'Inbox — add messages for agents:';
     sec.appendChild(label);
     const val = document.createElement('div');
     val.style.cssText = 'font-size:12px;padding:2px 0;';
@@ -1669,14 +1669,39 @@ function showArchive(asset) {
       card.style.cssText = 'border-left:3px solid #f0d888;border-radius:6px;padding:8px;background:linear-gradient(135deg,rgba(30,25,15,0.6),rgba(0,0,0,0.2));';
 
       const header = document.createElement('div');
-      header.style.cssText = 'display:flex;justify-content:space-between;font-size:11px;color:#aaa;margin-bottom:4px;';
+      header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;font-size:11px;color:#aaa;margin-bottom:4px;';
       const from = document.createElement('span');
       from.style.cssText = 'font-weight:bold;color:#f0d888;';
       from.textContent = '\u2709\ufe0f ' + (c.from || 'Unknown');
+      const headerRight = document.createElement('span');
+      headerRight.style.cssText = 'display:flex;align-items:center;gap:6px;';
       const time = document.createElement('span');
       time.textContent = c.completedAt ? new Date(c.completedAt).toLocaleString() : '';
+      const delBtn = document.createElement('button');
+      delBtn.textContent = '✕';
+      delBtn.title = 'Delete card';
+      delBtn.style.cssText = 'background:none;border:none;color:#888;cursor:pointer;font-size:13px;padding:0 2px;line-height:1;';
+      delBtn.onmouseenter = () => delBtn.style.color = '#e55';
+      delBtn.onmouseleave = () => delBtn.style.color = '#888';
+      delBtn.onclick = async () => {
+        delBtn.disabled = true;
+        // Recalculate index from current DOM order
+        const currentCards = [...list.children];
+        const idx = currentCards.indexOf(card);
+        if (idx === -1) return;
+        try {
+          const res = await fetch(`${HUB_HTTP_URL}/api/archive/${idx}`, {
+            method: 'DELETE',
+            headers: CONFIG.apiKey ? { Authorization: `Bearer ${CONFIG.apiKey}` } : {},
+          });
+          if (res.ok) card.remove();
+        } catch { /* ignore */ }
+        delBtn.disabled = false;
+      };
+      headerRight.appendChild(time);
+      headerRight.appendChild(delBtn);
       header.appendChild(from);
-      header.appendChild(time);
+      header.appendChild(headerRight);
 
       const text = document.createElement('div');
       text.style.cssText = 'font-size:12px;white-space:pre-wrap;word-break:break-word;margin-bottom:6px;';
@@ -1823,11 +1848,11 @@ function showInboxMessages(asset) {
     form.className = 'inline-row';
     const input = document.createElement('input');
     input.type = 'text';
-    input.placeholder = 'Send a message...';
+    input.placeholder = 'Add a message...';
     input.maxLength = 2000;
     input.className = 'form-input';
     const btn = document.createElement('button');
-    btn.textContent = 'Send';
+    btn.textContent = 'Add';
     btn.className = 'btn btn-primary';
     btn.onclick = async () => {
       const text = input.value.trim();
@@ -2188,9 +2213,65 @@ function showTask(asset) {
     box.appendChild(descWrap);
   }
 
+  // Assigned-to setting (openclaw stations only, authed only)
+  if (CONFIG.apiKey && asset.openclaw_task) {
+    const assignWrap = document.createElement('div');
+    assignWrap.className = 'section-mb';
+    const assignLabel = document.createElement('div');
+    assignLabel.className = 'text-muted';
+    assignLabel.style.fontSize = '11px';
+    assignLabel.style.marginBottom = '4px';
+    assignLabel.textContent = 'Assigned to:';
+    const assignRow = document.createElement('div');
+    assignRow.className = 'settings-row';
+    const assignSelect = document.createElement('select');
+    assignSelect.className = 'form-input';
+    // "Anyone" option
+    const anyOpt = document.createElement('option');
+    anyOpt.value = '';
+    anyOpt.textContent = 'Anyone';
+    assignSelect.appendChild(anyOpt);
+    // Add agents from the property
+    const seen = new Set();
+    for (const [, a] of agents) {
+      const name = a.agent_name || a.agent_id;
+      if (seen.has(name)) continue;
+      seen.add(name);
+      const opt = document.createElement('option');
+      opt.value = name;
+      opt.textContent = name;
+      if (asset.assigned_to && name === asset.assigned_to) opt.selected = true;
+      assignSelect.appendChild(opt);
+    }
+    // If assigned_to is set but agent isn't online, still show it
+    if (asset.assigned_to && !seen.has(asset.assigned_to)) {
+      const opt = document.createElement('option');
+      opt.value = asset.assigned_to;
+      opt.textContent = asset.assigned_to + ' (offline)';
+      opt.selected = true;
+      assignSelect.appendChild(opt);
+    }
+    assignSelect.onchange = async () => {
+      assignSelect.disabled = true;
+      try {
+        const res = await fetch(`${HUB_HTTP_URL}/api/task/${encodeURIComponent(station)}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${CONFIG.apiKey}` },
+          body: JSON.stringify({ assigned_to: assignSelect.value || null }),
+        });
+        if (!res.ok) assignSelect.disabled = false;
+      } catch { assignSelect.disabled = false; }
+      assignSelect.disabled = false;
+    };
+    assignRow.appendChild(assignSelect);
+    assignWrap.appendChild(assignLabel);
+    assignWrap.appendChild(assignRow);
+    box.appendChild(assignWrap);
+  }
+
   // Copy-paste agent prompt (not for openclaw_task — agent spawns on demand)
   if (!asset.openclaw_task) {
-    const agentPrompt = `Work on the "${station}" task station. Call work_task("${station}") and handle visitor requests in a loop.`;
+    const agentPrompt = `Do your duty. Call subscribe() then check_events() in a loop. When a task arrives, do the work and call answer_task with the result, then check_events() again.`;
     const promptWrap = document.createElement('div');
     promptWrap.className = 'section-mb';
     const promptLabel = document.createElement('div');
@@ -2338,7 +2419,7 @@ function showTask(asset) {
 
     const canRerun = isOpen || isOcTask;
     const clearBtn = document.createElement('button');
-    clearBtn.textContent = canRerun ? 'Run again' : 'Clear results';
+    clearBtn.textContent = canRerun ? 'Accept' : 'Clear results';
     clearBtn.className = `btn ${canRerun ? 'btn-primary' : 'btn-danger'}`;
     clearBtn.onclick = async () => {
       clearBtn.disabled = true;
