@@ -2213,9 +2213,49 @@ function showTask(asset) {
     box.appendChild(descWrap);
   }
 
+  // Assigned-to setting (authed only)
+  if (CONFIG.apiKey) {
+    const assignWrap = document.createElement('div');
+    assignWrap.className = 'section-mb';
+    const assignLabel = document.createElement('div');
+    assignLabel.className = 'text-muted';
+    assignLabel.style.fontSize = '11px';
+    assignLabel.style.marginBottom = '4px';
+    assignLabel.textContent = 'Assigned to (leave empty for anyone):';
+    const assignRow = document.createElement('div');
+    assignRow.className = 'settings-row';
+    const assignInput = document.createElement('input');
+    assignInput.type = 'text';
+    assignInput.className = 'form-input';
+    assignInput.placeholder = 'e.g. claude, scout';
+    assignInput.value = asset.assigned_to || '';
+    assignInput.maxLength = 100;
+    const assignBtn = document.createElement('button');
+    assignBtn.textContent = 'Save';
+    assignBtn.className = 'btn btn-primary';
+    assignBtn.onclick = async () => {
+      assignBtn.disabled = true;
+      assignBtn.textContent = 'Saving...';
+      try {
+        const res = await fetch(`${HUB_HTTP_URL}/api/task/${encodeURIComponent(station)}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${CONFIG.apiKey}` },
+          body: JSON.stringify({ assigned_to: assignInput.value.trim() || null }),
+        });
+        if (res.ok) { assignBtn.textContent = '✓ Saved'; }
+        else { assignBtn.textContent = 'Failed'; assignBtn.disabled = false; }
+      } catch { assignBtn.textContent = 'Failed'; assignBtn.disabled = false; }
+    };
+    assignRow.appendChild(assignInput);
+    assignRow.appendChild(assignBtn);
+    assignWrap.appendChild(assignLabel);
+    assignWrap.appendChild(assignRow);
+    box.appendChild(assignWrap);
+  }
+
   // Copy-paste agent prompt (not for openclaw_task — agent spawns on demand)
   if (!asset.openclaw_task) {
-    const agentPrompt = `Subscribe to "${station}" and loop: check_events() → do the work → answer_task("${station}", "<result>") → check_events() again.`;
+    const agentPrompt = `Do your duty. Call subscribe() then check_events() in a loop. When a task arrives, do the work and call answer_task with the result, then check_events() again.`;
     const promptWrap = document.createElement('div');
     promptWrap.className = 'section-mb';
     const promptLabel = document.createElement('div');

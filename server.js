@@ -322,7 +322,7 @@ function buildDefaultWelcomeText() {
   if (w.tasks.length > 0) {
     lines.push(`**Task stations (interactive — visitors trigger these, you do the work):**`);
     for (const t of w.tasks) lines.push(`  - ${t}`);
-    lines.push(`*Workflow: subscribe({name}) → check_events() (blocks until triggered) → do the work → answer_task({station, result}) → check_events() again*`);
+    lines.push(`*Workflow: subscribe() → check_events() (blocks until triggered) → do the work → answer_task({station, result}) → check_events() again*`);
   }
   if (w.openclawTasks.length > 0) {
     lines.push(`**OpenClaw task stations (auto-spawn — do NOT call work_task on these):**`);
