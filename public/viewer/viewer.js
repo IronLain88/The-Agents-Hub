@@ -2190,7 +2190,7 @@ function showTask(asset) {
 
   // Copy-paste agent prompt (not for openclaw_task — agent spawns on demand)
   if (!asset.openclaw_task) {
-    const agentPrompt = `Work on the "${station}" task station. Call work_task("${station}") and handle visitor requests in a loop.`;
+    const agentPrompt = `Subscribe to "${station}" and loop: check_events() → do the work → answer_task("${station}", "<result>") → check_events() again.`;
     const promptWrap = document.createElement('div');
     promptWrap.className = 'section-mb';
     const promptLabel = document.createElement('div');
