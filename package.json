@@ -1,6 +1,6 @@
 {
   "name": "agent-village-slim-hub",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Slim hub server for agent village visualization",
   "type": "module",
   "main": "server.js",
