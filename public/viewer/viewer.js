@@ -2221,33 +2221,49 @@ function showTask(asset) {
     assignLabel.className = 'text-muted';
     assignLabel.style.fontSize = '11px';
     assignLabel.style.marginBottom = '4px';
-    assignLabel.textContent = 'Assigned to (leave empty for anyone):';
+    assignLabel.textContent = 'Assigned to:';
     const assignRow = document.createElement('div');
     assignRow.className = 'settings-row';
-    const assignInput = document.createElement('input');
-    assignInput.type = 'text';
-    assignInput.className = 'form-input';
-    assignInput.placeholder = 'e.g. claude, scout';
-    assignInput.value = asset.assigned_to || '';
-    assignInput.maxLength = 100;
-    const assignBtn = document.createElement('button');
-    assignBtn.textContent = 'Save';
-    assignBtn.className = 'btn btn-primary';
-    assignBtn.onclick = async () => {
-      assignBtn.disabled = true;
-      assignBtn.textContent = 'Saving...';
+    const assignSelect = document.createElement('select');
+    assignSelect.className = 'form-input';
+    // "Anyone" option
+    const anyOpt = document.createElement('option');
+    anyOpt.value = '';
+    anyOpt.textContent = 'Anyone';
+    assignSelect.appendChild(anyOpt);
+    // Add agents from the property
+    const seen = new Set();
+    for (const [, a] of agents) {
+      const name = a.agent_name || a.agent_id;
+      if (seen.has(name)) continue;
+      seen.add(name);
+      const opt = document.createElement('option');
+      opt.value = name;
+      opt.textContent = name;
+      if (asset.assigned_to && name === asset.assigned_to) opt.selected = true;
+      assignSelect.appendChild(opt);
+    }
+    // If assigned_to is set but agent isn't online, still show it
+    if (asset.assigned_to && !seen.has(asset.assigned_to)) {
+      const opt = document.createElement('option');
+      opt.value = asset.assigned_to;
+      opt.textContent = asset.assigned_to + ' (offline)';
+      opt.selected = true;
+      assignSelect.appendChild(opt);
+    }
+    assignSelect.onchange = async () => {
+      assignSelect.disabled = true;
       try {
         const res = await fetch(`${HUB_HTTP_URL}/api/task/${encodeURIComponent(station)}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${CONFIG.apiKey}` },
-          body: JSON.stringify({ assigned_to: assignInput.value.trim() || null }),
+          body: JSON.stringify({ assigned_to: assignSelect.value || null }),
         });
-        if (res.ok) { assignBtn.textContent = '✓ Saved'; }
-        else { assignBtn.textContent = 'Failed'; assignBtn.disabled = false; }
-      } catch { assignBtn.textContent = 'Failed'; assignBtn.disabled = false; }
+        if (!res.ok) assignSelect.disabled = false;
+      } catch { assignSelect.disabled = false; }
+      assignSelect.disabled = false;
     };
-    assignRow.appendChild(assignInput);
-    assignRow.appendChild(assignBtn);
+    assignRow.appendChild(assignSelect);
     assignWrap.appendChild(assignLabel);
     assignWrap.appendChild(assignRow);
     box.appendChild(assignWrap);
