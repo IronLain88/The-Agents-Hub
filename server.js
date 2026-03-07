@@ -18,6 +18,7 @@ import receptionRoutes from "./src/routes/reception.js";
 import taskRoutes from "./src/routes/tasks.js";
 import boardRoutes from "./src/routes/boards.js";
 import inboxRoutes from "./src/routes/inbox.js";
+import queueRoutes from "./src/routes/queue.js";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // Load .env file
@@ -389,6 +390,7 @@ app.use(receptionRoutes(ctx));
 app.use(taskRoutes(ctx));
 app.use(boardRoutes(ctx));
 app.use(inboxRoutes(ctx));
+app.use(queueRoutes(ctx));
 
 // --- HTTP + WebSocket server ---
 const httpServer = createServer(app);
