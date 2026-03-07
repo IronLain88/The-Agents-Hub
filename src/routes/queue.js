@@ -17,6 +17,23 @@ function makeDtoId() {
   return Math.random().toString(36).slice(2, 10);
 }
 
+function triggerTaskStation(asset, dto, broadcast, getProperty) {
+  if (!asset?.task) return;
+  let state = { status: "idle", result: null };
+  try { if (asset.content?.data) state = JSON.parse(asset.content.data); } catch {}
+  if (state.status !== "idle") return; // already busy
+  const first = dto.trail[0] || {};
+  state.status = "pending";
+  state.result = null;
+  state.claimedBy = null;
+  state.startedAt = new Date().toISOString();
+  state.prompt = first.data || "";
+  asset.content = { type: "task", data: JSON.stringify(state) };
+  broadcast({ type: "signal", station: asset.station, trigger: "manual", timestamp: Date.now(), payload: { station: asset.station, instructions: asset.instructions } });
+  broadcast({ type: "property_update", property: getProperty() });
+  console.log(`[hub] Queue: triggered task station "${asset.station}" (dto ${dto.id})`);
+}
+
 export default function queueRoutes(ctx) {
   const router = Router();
   const { requireAuth, stateLimiter, getProperty, broadcast, savePropertyToDisk } = ctx;
@@ -57,8 +74,14 @@ export default function queueRoutes(ctx) {
     queues[station].push(dto);
     while (queues[station].length > 100) queues[station].shift();
 
-    // Wake up any agent waiting at this station
-    broadcast({ type: "signal", station, trigger: "manual", timestamp: Date.now() });
+    // Trigger task station if applicable, otherwise just fire signal
+    const property = getProperty();
+    const stationAsset = property?.assets?.find(a => a.station === station);
+    if (stationAsset?.task) {
+      triggerTaskStation(stationAsset, dto, broadcast, getProperty);
+    } else {
+      broadcast({ type: "signal", station, trigger: "manual", timestamp: Date.now() });
+    }
 
     savePropertyToDisk().catch(e => console.error("[hub] Failed to save:", e));
     console.log(`[hub] Queue "${station}": DTO ${dto.id} created by "${by}"`);
@@ -119,8 +142,12 @@ export default function queueRoutes(ctx) {
       to_pos: toAsset?.position || { x: 0, y: 0 },
     });
 
-    // Wake up any agent waiting at the target station
-    broadcast({ type: "signal", station: target_station, trigger: "manual", timestamp: Date.now() });
+    // Trigger task station if applicable, otherwise just fire signal
+    if (toAsset?.task) {
+      triggerTaskStation(toAsset, dto, broadcast, getProperty);
+    } else {
+      broadcast({ type: "signal", station: target_station, trigger: "manual", timestamp: Date.now() });
+    }
 
     savePropertyToDisk().catch(e => console.error("[hub] Failed to save:", e));
     console.log(`[hub] Queue: DTO "${dto.id}" forwarded "${station}" → "${target_station}" by "${by}"`);
