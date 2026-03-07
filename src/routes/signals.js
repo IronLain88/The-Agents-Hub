@@ -37,6 +37,29 @@ export default function signalRoutes(ctx) {
 
     broadcast(message);
 
+    // Create a DTO in the station's queue with the signal data
+    if (asset) {
+      let dtoData = asset.instructions || "Signal received";
+      if (payload) {
+        if (typeof payload === "string") dtoData = payload;
+        else if (payload.data) dtoData = payload.data;
+        else if (payload.text) dtoData = payload.text;
+        else dtoData = JSON.stringify(payload);
+      }
+      if (!currentProperty.queues) currentProperty.queues = {};
+      if (!currentProperty.queues[station]) currentProperty.queues[station] = [];
+      const dto = {
+        id: Math.random().toString(36).slice(2, 10),
+        type: "signal",
+        created_at: new Date().toISOString(),
+        trail: [{ station, by: "Signal", at: new Date().toISOString(), data: dtoData }],
+      };
+      currentProperty.queues[station].push(dto);
+      while (currentProperty.queues[station].length > 100) currentProperty.queues[station].shift();
+      savePropertyToDisk().catch(e => console.error("[hub] Failed to save:", e));
+      console.log(`[hub] Signal "${station}": DTO ${dto.id} created`);
+    }
+
     const payloadInfo = (payload !== undefined || asset?.trigger_payload !== undefined)
       ? (allowPayload ? " (with payload)" : " (payload blocked)")
       : "";

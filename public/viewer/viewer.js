@@ -1286,6 +1286,11 @@ function getTaskTargets() {
     if (!a.trigger || a.trigger !== 'manual' || a.task) continue;
     targets.push({ type: 'signal', station: a.station, label: `${a.station.replace(/_/g, ' ')} (signal)`, busy: false });
   }
+  // Archive stations
+  for (const a of property?.assets || []) {
+    if (!a.archive || !a.station) continue;
+    targets.push({ type: 'archive', station: a.station, label: `${a.station.replace(/_/g, ' ')} (archive)`, busy: false });
+  }
   return targets;
 }
 
