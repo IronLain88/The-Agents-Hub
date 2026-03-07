@@ -56,6 +56,7 @@ export default function signalRoutes(ctx) {
       };
       currentProperty.queues[station].push(dto);
       while (currentProperty.queues[station].length > 100) currentProperty.queues[station].shift();
+      message.payload = { ...(message.payload || {}), dtoId: dto.id };
       savePropertyToDisk().catch(e => console.error("[hub] Failed to save:", e));
       console.log(`[hub] Signal "${station}": DTO ${dto.id} created`);
     }
