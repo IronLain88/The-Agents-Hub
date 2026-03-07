@@ -29,6 +29,11 @@ export default function propertyRoutes(ctx) {
     if (!property) {
       return res.status(400).json({ error: "invalid property data" });
     }
+    // Preserve existing queues if the incoming property doesn't have them
+    const existing = getProperty();
+    if (existing?.queues && !property.queues) {
+      property.queues = existing.queues;
+    }
     setProperty(property);
     broadcast({ type: "property_update", property });
     savePropertyToDisk().catch(e => console.error("[hub] Failed to save property:", e));
