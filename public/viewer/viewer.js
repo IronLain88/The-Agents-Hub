@@ -2153,7 +2153,6 @@ function showTask(asset) {
   box.appendChild(title);
 
   const isAuthed = !!CONFIG.apiKey;
-  const canRun = asset.task_public !== false || isAuthed;
 
   // Task instructions — editable for authed users
   if (asset.instructions || isAuthed) {
@@ -2291,68 +2290,60 @@ function showTask(asset) {
 
   const isOcTask = !!asset.openclaw_task;
 
-  // Helper: build Run button
-  function buildRunUI() {
-    const btn = document.createElement('button');
-    btn.textContent = 'Run';
-    btn.className = 'btn btn-primary';
-    btn.onclick = async () => {
-      btn.disabled = true;
-      btn.textContent = 'Starting...';
-      try {
-        const headers = { 'Content-Type': 'application/json' };
-        if (CONFIG.apiKey) headers['Authorization'] = `Bearer ${CONFIG.apiKey}`;
-        const res = await fetch(`${HUB_HTTP_URL}/api/task/${encodeURIComponent(station)}/run`, {
-          method: 'POST', headers, body: JSON.stringify({}),
-        });
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({ error: res.statusText }));
-          btn.textContent = err.error || 'Error';
-          btn.disabled = false;
-        }
-      } catch {
-        btn.textContent = 'Failed';
-        btn.disabled = false;
-      }
-    };
-    return btn;
-  }
-
-  if (!isOpen && !isOcTask) {
-    const closed = document.createElement('div');
-    closed.className = 'text-muted section-pad';
-    closed.textContent = 'No agent on duty \u2014 task will run when one arrives.';
-    box.appendChild(closed);
-  } else if (state.status === 'idle') {
+  if (state.status === 'idle') {
     if (isOpen) {
       const info = document.createElement('div');
       info.className = 'text-green section-mb';
       info.textContent = `${agentNames} on duty`;
       box.appendChild(info);
+    } else if (!isOcTask) {
+      const closed = document.createElement('div');
+      closed.className = 'text-muted section-pad';
+      closed.textContent = 'No agent on duty \u2014 task will run when one arrives.';
+      box.appendChild(closed);
     }
 
-    if (canRun) {
-      box.appendChild(buildRunUI());
-    } else {
-      const locked = document.createElement('div');
-      locked.className = 'text-muted text-italic';
-      locked.textContent = 'Login required to run this task.';
-      box.appendChild(locked);
-    }
+    const addForm = document.createElement('div');
+    addForm.className = 'inline-row';
+    const addInput = document.createElement('input');
+    addInput.type = 'text';
+    addInput.placeholder = 'Add a task...';
+    addInput.maxLength = 2000;
+    addInput.className = 'form-input';
+    const addBtn = document.createElement('button');
+    addBtn.textContent = 'Add';
+    addBtn.className = 'btn btn-primary';
+    addBtn.onclick = async () => {
+      const text = addInput.value.trim();
+      if (!text) return;
+      addBtn.disabled = true;
+      try {
+        const headers = { 'Content-Type': 'application/json' };
+        if (CONFIG.apiKey) headers['Authorization'] = `Bearer ${CONFIG.apiKey}`;
+        const res = await fetch(`${HUB_HTTP_URL}/api/queue/${encodeURIComponent(station)}`, {
+          method: 'POST', headers,
+          body: JSON.stringify({ type: 'task', by: 'Viewer', data: text }),
+        });
+        if (res.ok) {
+          addInput.value = '';
+          addBtn.textContent = 'Added';
+          setTimeout(() => { addBtn.textContent = 'Add'; addBtn.disabled = false; }, 2000);
+        } else {
+          addBtn.textContent = 'Failed';
+          addBtn.disabled = false;
+        }
+      } catch { addBtn.textContent = 'Failed'; addBtn.disabled = false; }
+    };
+    addInput.addEventListener('keydown', e => { if (e.key === 'Enter') addBtn.click(); });
+    addForm.appendChild(addInput);
+    addForm.appendChild(addBtn);
+    box.appendChild(addForm);
   } else if (state.status === 'pending') {
-    // Show card origin if present
-    if (state.card) {
-      const cardEl = document.createElement('div');
-      cardEl.style.cssText = 'border-left:3px solid #f0d888;padding:6px 10px;margin-bottom:10px;background:rgba(240,216,136,0.06);border-radius:0 6px 6px 0;font-size:12px;';
-      const cardHeader = document.createElement('div');
-      cardHeader.style.cssText = 'color:#f0d888;font-weight:bold;margin-bottom:2px;';
-      cardHeader.textContent = `\u2709\ufe0f ${state.card.from || 'Unknown'} (${state.card.source || 'inbox'})`;
-      const cardText = document.createElement('div');
-      cardText.style.cssText = 'color:#ccc;white-space:pre-wrap;word-break:break-word;';
-      cardText.textContent = state.card.text || '';
-      cardEl.appendChild(cardHeader);
-      cardEl.appendChild(cardText);
-      box.appendChild(cardEl);
+    if (state.prompt) {
+      const promptEl = document.createElement('div');
+      promptEl.style.cssText = 'border-left:3px solid #f0d888;padding:6px 10px;margin-bottom:10px;background:rgba(240,216,136,0.06);border-radius:0 6px 6px 0;font-size:12px;color:#ccc;white-space:pre-wrap;word-break:break-word;';
+      promptEl.textContent = state.prompt;
+      box.appendChild(promptEl);
     }
 
     const info = document.createElement('div');
@@ -2381,67 +2372,31 @@ function showTask(asset) {
       box.appendChild(cancel);
     }
   } else if (state.status === 'done') {
-    // Show card origin if present
-    if (state.card) {
-      const cardEl = document.createElement('div');
-      cardEl.style.cssText = 'border-left:3px solid #f0d888;padding:6px 10px;margin-bottom:10px;background:rgba(240,216,136,0.06);border-radius:0 6px 6px 0;font-size:12px;';
-      const cardHeader = document.createElement('div');
-      cardHeader.style.cssText = 'color:#f0d888;font-weight:bold;margin-bottom:2px;';
-      cardHeader.textContent = `\u2709\ufe0f ${state.card.from || 'Unknown'} (${state.card.source || 'inbox'})`;
-      const cardText = document.createElement('div');
-      cardText.style.cssText = 'color:#ccc;white-space:pre-wrap;word-break:break-word;';
-      cardText.textContent = state.card.text || '';
-      cardEl.appendChild(cardHeader);
-      cardEl.appendChild(cardText);
-      box.appendChild(cardEl);
-    }
-
     const resultEl = document.createElement('div');
     resultEl.className = 'rich-content section-mb';
     resultEl.innerHTML = sanitizeHTML(state.result);
     box.appendChild(resultEl);
 
-    const btnRow = document.createElement('div');
-    btnRow.style.cssText = 'display:flex;gap:6px;margin-top:8px;';
-
-    const canRerun = isOpen || isOcTask;
-    const clearBtn = document.createElement('button');
-    clearBtn.textContent = canRerun ? 'Accept' : 'Clear results';
-    clearBtn.className = `btn ${canRerun ? 'btn-primary' : 'btn-danger'}`;
-    clearBtn.onclick = async () => {
-      clearBtn.disabled = true;
+    const acceptBtn = document.createElement('button');
+    acceptBtn.textContent = 'Accept';
+    acceptBtn.className = 'btn btn-primary';
+    acceptBtn.onclick = async () => {
+      acceptBtn.disabled = true;
+      acceptBtn.textContent = 'Accepting...';
       try {
+        const headers = { 'Content-Type': 'application/json', ...(CONFIG.apiKey && { Authorization: `Bearer ${CONFIG.apiKey}` }) };
+        if (state.dtoId) {
+          await fetch(`${HUB_HTTP_URL}/api/queue/${encodeURIComponent(station)}/${state.dtoId}/forward`, {
+            method: 'POST', headers,
+            body: JSON.stringify({ target_station: station, by: 'Agent', data: state.result || '' }),
+          });
+        }
         await fetch(`${HUB_HTTP_URL}/api/task/${encodeURIComponent(station)}/clear`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...(CONFIG.apiKey && { Authorization: `Bearer ${CONFIG.apiKey}` }) },
+          method: 'POST', headers,
         });
       } catch {}
     };
-    btnRow.appendChild(clearBtn);
-
-    // Archive button when done + has card + archive station exists
-    if (state.card && property?.assets?.some(a => a.archive)) {
-      const archiveBtn = document.createElement('button');
-      archiveBtn.textContent = 'Archive';
-      archiveBtn.className = 'btn btn-accent';
-      archiveBtn.onclick = async () => {
-        archiveBtn.disabled = true;
-        archiveBtn.textContent = 'Archiving...';
-        try {
-          const headers = { 'Content-Type': 'application/json' };
-          if (CONFIG.apiKey) headers['Authorization'] = `Bearer ${CONFIG.apiKey}`;
-          const res = await fetch(`${HUB_HTTP_URL}/api/archive/${encodeURIComponent(station)}`, { method: 'POST', headers });
-          if (!res.ok) {
-            const err = await res.json().catch(() => ({}));
-            archiveBtn.textContent = err.error || 'Error';
-            archiveBtn.disabled = false;
-          }
-        } catch { archiveBtn.textContent = 'Failed'; archiveBtn.disabled = false; }
-      };
-      btnRow.appendChild(archiveBtn);
-    }
-
-    box.appendChild(btnRow);
+    box.appendChild(acceptBtn);
   }
 
   modal.appendChild(box);

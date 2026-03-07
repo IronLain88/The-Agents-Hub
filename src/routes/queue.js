@@ -28,6 +28,7 @@ function triggerTaskStation(asset, dto, broadcast, getProperty) {
   state.claimedBy = null;
   state.startedAt = new Date().toISOString();
   state.prompt = first.data || "";
+  state.dtoId = dto.id;
   asset.content = { type: "task", data: JSON.stringify(state) };
   broadcast({ type: "signal", station: asset.station, trigger: "manual", timestamp: Date.now(), payload: { station: asset.station, instructions: asset.instructions } });
   broadcast({ type: "property_update", property: getProperty() });
