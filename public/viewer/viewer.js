@@ -2334,6 +2334,7 @@ function showTask(asset) {
           addInput.value = '';
           addBtn.textContent = 'Added';
           setTimeout(() => { addBtn.textContent = 'Add'; addBtn.disabled = false; }, 2000);
+          loadDtoQueue();
         } else {
           addBtn.textContent = 'Failed';
           addBtn.disabled = false;
@@ -2415,13 +2416,18 @@ function showTask(asset) {
   });
   document.body.appendChild(modal);
 
-  // Async: load DTO queue for this station
-  (async () => {
+  // DTO queue container — refreshable
+  const dtoContainer = document.createElement('div');
+  dtoContainer.id = 'task-dto-container';
+  box.appendChild(dtoContainer);
+
+  async function loadDtoQueue() {
     try {
       const headers = CONFIG.apiKey ? { Authorization: `Bearer ${CONFIG.apiKey}` } : {};
       const res = await fetch(`${HUB_HTTP_URL}/api/queue/${encodeURIComponent(station)}`, { headers });
       if (!res.ok) return;
       const { dtos } = await res.json();
+      dtoContainer.innerHTML = '';
       if (!dtos || !dtos.length) return;
       if (!document.getElementById('station-modal')) return;
 
@@ -2506,7 +2512,7 @@ function showTask(asset) {
         activeTitle.textContent = '⚡ Active Task';
         activeSection.appendChild(activeTitle);
         activeSection.appendChild(buildDtoCard(activeDto, true));
-        box.appendChild(activeSection);
+        dtoContainer.appendChild(activeSection);
       }
 
       if (queueDtos.length > 0) {
@@ -2517,10 +2523,11 @@ function showTask(asset) {
         queueTitle.textContent = `📬 DTO Queue (${queueDtos.length})`;
         queueSection.appendChild(queueTitle);
         for (const dto of queueDtos) queueSection.appendChild(buildDtoCard(dto, false));
-        box.appendChild(queueSection);
+        dtoContainer.appendChild(queueSection);
       }
     } catch { /* ignore */ }
-  })();
+  }
+  loadDtoQueue();
 }
 
 async function showRemoteBoard(asset) {
@@ -2612,7 +2619,7 @@ function showSignalInfo(asset) {
     setup += `  forward_dto(id, "${station}", "${station}", result)\n`;
     setup += '}';
   } else if (trigger === 'heartbeat') {
-    desc += `Fires automatically every ${interval} second${interval !== 1 ? 's' : ''}.`;
+    desc += `Fires every ${interval}s. Accumulates results in a single DTO.\nWhen forwarded, a new DTO is created on next tick.`;
     setup = 'HOW TO USE:\n\n';
     setup += `subscribe({ name: "${station}" })\n`;
     setup += 'Loop with check_events()\n\n';
@@ -2626,7 +2633,7 @@ function showSignalInfo(asset) {
   if (trigger === 'manual') {
     agentPrompt = `Subscribe to "${station}" and loop: check_events() → when it fires, receive_dto("${station}") to get the task, do the work, say() a brief summary in your speech bubble, then forward_dto back to "${station}" with the full result → repeat.`;
   } else {
-    agentPrompt = `Subscribe to "${station}" and loop: check_events() (fires every ${interval}s) → receive_dto("${station}") to get data, do your periodic task, forward_dto back with result → repeat.`;
+    agentPrompt = `Subscribe to "${station}" and loop: check_events() (fires every ${interval}s) → receive_dto("${station}", dto_id) to get data, do your periodic task, say() a brief summary, then forward_dto back with result → repeat.`;
   }
 
   const fireBtn = trigger === 'manual' ? { station } : null;
