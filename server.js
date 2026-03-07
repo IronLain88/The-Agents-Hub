@@ -47,6 +47,7 @@ const IS_PRODUCTION = NODE_ENV === "production";
 const ALLOW_SIGNAL_PAYLOADS = process.env.ALLOW_SIGNAL_PAYLOADS === "true";
 const ENABLE_REMOTE_BOARDS = process.env.ENABLE_REMOTE_BOARDS === "true";
 const ENABLE_BOARD = process.env.ENABLE_BOARD === "true";
+const ENABLE_GET_INBOX = process.env.ENABLE_GET_INBOX !== "false";
 
 console.log(`[hub] Environment: ${NODE_ENV}`);
 console.log(`[hub] Signal payloads: ${ALLOW_SIGNAL_PAYLOADS ? 'ENABLED' : 'DISABLED (set ALLOW_SIGNAL_PAYLOADS=true to enable)'}`);
@@ -375,7 +376,7 @@ const ctx = {
   agentPreviousState, assignCharacter, buildWelcome, spriteStore,
   PROPERTIES_DIR, DATA_DIR, TILESETS_DIR, IMAGES_DIR, CUTOUTS_DIR,
   IS_PRODUCTION, PROP_W, PROP_H, API_KEY,
-  ALLOW_SIGNAL_PAYLOADS, ENABLE_BOARD, ENABLE_REMOTE_BOARDS,
+  ALLOW_SIGNAL_PAYLOADS, ENABLE_BOARD, ENABLE_REMOTE_BOARDS, ENABLE_GET_INBOX,
   __dirname,
 };
 

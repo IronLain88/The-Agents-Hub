@@ -2619,7 +2619,47 @@ function showSignalInfo(asset) {
   }
 
   const fireBtn = trigger === 'manual' ? { station } : null;
-  showModal(`🔔 ${station}`, desc, false, setup, editableInterval, asset, (box) => {
+  const hasBoard = !!asset.content?.data;
+  showModal(`🔔 ${station}`, desc, hasBoard, setup, editableInterval, asset, (box) => {
+    // Show board content if agent has posted to this signal
+    if (hasBoard) {
+      const boardWrap = document.createElement('div');
+      boardWrap.className = 'section-mb';
+      const boardLabel = document.createElement('div');
+      boardLabel.className = 'text-muted';
+      boardLabel.style.cssText = 'font-size:11px;margin-bottom:6px;';
+      const age = asset.content.publishedAt ? ' — ' + new Date(asset.content.publishedAt).toLocaleString() : '';
+      boardLabel.textContent = `Board content (${asset.content.type || 'text'})${age}`;
+
+      if (asset.content.type === 'html') {
+        const iframe = document.createElement('iframe');
+        iframe.sandbox = 'allow-same-origin';
+        iframe.style.cssText = 'width:100%;border:1px solid rgba(255,255,255,0.1);border-radius:6px;background:#1a1a2e;min-height:120px;';
+        iframe.srcdoc = asset.content.data;
+        iframe.onload = () => {
+          const h = iframe.contentDocument?.documentElement?.scrollHeight;
+          if (h) iframe.style.height = Math.min(h + 4, 400) + 'px';
+        };
+        boardWrap.appendChild(boardLabel);
+        boardWrap.appendChild(iframe);
+      } else {
+        const boardPre = document.createElement('pre');
+        boardPre.className = 'modal-content';
+        boardPre.style.cssText = 'max-height:200px;overflow:auto;margin:0;';
+        boardPre.textContent = asset.content.data;
+        boardWrap.appendChild(boardLabel);
+        boardWrap.appendChild(boardPre);
+      }
+
+      const titleEl = box.querySelector('.modal-title');
+      if (titleEl && titleEl.nextSibling) {
+        box.insertBefore(boardWrap, titleEl.nextSibling);
+      } else {
+        box.appendChild(boardWrap);
+      }
+    }
+
+    // Agent prompt section
     const promptWrap = document.createElement('div');
     promptWrap.className = 'section-mb';
     const promptLabel = document.createElement('div');
@@ -2647,10 +2687,10 @@ function showSignalInfo(asset) {
     promptRow.appendChild(copyBtn);
     promptWrap.appendChild(promptLabel);
     promptWrap.appendChild(promptRow);
-    // Insert after title, before description
-    const titleEl = box.querySelector('.modal-title');
-    if (titleEl && titleEl.nextSibling) {
-      box.insertBefore(promptWrap, titleEl.nextSibling);
+    // Insert after board content (or after title if no board)
+    const contentEl = box.querySelector('.modal-content');
+    if (contentEl) {
+      box.insertBefore(promptWrap, contentEl);
     } else {
       box.appendChild(promptWrap);
     }
