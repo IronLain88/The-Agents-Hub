@@ -2604,9 +2604,9 @@ function showSignalInfo(asset) {
   if (trigger === 'manual') {
     desc += 'Fires manually via API, viewer, or git hooks.\nCreates a DTO in the station queue on each fire.';
     setup = 'PRO TIPS:\n\n';
-    setup += '• Instead of [INSERT TASK], reference a .md file\n';
+    setup += '• Instead of [YOUR TASK HERE], reference a .md file\n';
     setup += '  with detailed instructions for the agent.\n\n';
-    setup += '• Leave [INSERT TASK] empty and define everything\n';
+    setup += '• Leave [YOUR TASK HERE] empty and define everything\n';
     setup += '  in the CLAUDE.md file instead.';
   } else if (trigger === 'heartbeat') {
     desc += `Fires every ${interval}s. Accumulates results in a single DTO.\nWhen forwarded, a new DTO is created on next tick.`;
@@ -2621,7 +2621,7 @@ function showSignalInfo(asset) {
   // Copy-paste agent prompt
   let agentPrompt;
   if (trigger === 'manual') {
-    agentPrompt = `Subscribe to "${station}" and loop: check_events() → when it fires, receive_dto("${station}") to get the task, [INSERT TASK], say() a brief summary in your speech bubble, then forward_dto back to "${station}" with the full result → repeat.`;
+    agentPrompt = `Subscribe to "${station}" and loop: check_events() → when it fires, receive_dto("${station}") to get the task, [YOUR TASK HERE], say() a brief summary in your speech bubble, then forward_dto back to "${station}" with the full result → repeat.`;
   } else {
     agentPrompt = `Subscribe to "${station}" and loop: check_events() (fires every ${interval}s) → receive_dto("${station}", dto_id) to get data, do your periodic task, say() a brief summary, then forward_dto back with result → repeat.`;
   }
