@@ -57,6 +57,9 @@ export default function queueRoutes(ctx) {
     queues[station].push(dto);
     while (queues[station].length > 100) queues[station].shift();
 
+    // Wake up any agent waiting at this station
+    broadcast({ type: "signal", station, trigger: "manual", timestamp: Date.now() });
+
     savePropertyToDisk().catch(e => console.error("[hub] Failed to save:", e));
     console.log(`[hub] Queue "${station}": DTO ${dto.id} created by "${by}"`);
     res.json({ ok: true, dto });
@@ -91,6 +94,15 @@ export default function queueRoutes(ctx) {
     if (idx === -1) return res.status(404).json({ error: "DTO not found" });
 
     const { target_station, by, data } = validation.data;
+
+    // Same-station: update trail in place (agent marking work done)
+    if (target_station === station) {
+      queue[idx].trail.push({ station, by, at: new Date().toISOString(), data });
+      savePropertyToDisk().catch(e => console.error("[hub] Failed to save:", e));
+      console.log(`[hub] Queue: DTO "${queue[idx].id}" trail updated at "${station}" by "${by}"`);
+      return res.json({ ok: true, dto: queue[idx] });
+    }
+
     const [dto] = queue.splice(idx, 1);
     dto.trail.push({ station: target_station, by, at: new Date().toISOString(), data });
 
@@ -106,6 +118,9 @@ export default function queueRoutes(ctx) {
       from_pos: fromAsset?.position || { x: 0, y: 0 },
       to_pos: toAsset?.position || { x: 0, y: 0 },
     });
+
+    // Wake up any agent waiting at the target station
+    broadcast({ type: "signal", station: target_station, trigger: "manual", timestamp: Date.now() });
 
     savePropertyToDisk().catch(e => console.error("[hub] Failed to save:", e));
     console.log(`[hub] Queue: DTO "${dto.id}" forwarded "${station}" → "${target_station}" by "${by}"`);

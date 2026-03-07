@@ -1724,187 +1724,174 @@ function showArchive(asset) {
   });
 }
 
-function showInboxMessages(asset) {
-  let messages = [];
-  try {
-    if (asset.content?.data) {
-      const parsed = typeof asset.content.data === 'string'
-        ? JSON.parse(asset.content.data) : asset.content.data;
-      if (Array.isArray(parsed)) messages = parsed;
-    }
-  } catch { /* ignore parse errors */ }
+function renderDtoCard(dto, list, fromStation, targets) {
+  const first = dto.trail[0] || {};
+  const card = document.createElement('div');
+  card.style.cssText = 'border:1px solid rgba(255,255,255,0.1);border-left:3px solid #f0d888;border-radius:6px;padding:8px;background:linear-gradient(135deg,rgba(30,25,15,0.6),rgba(0,0,0,0.2));box-shadow:0 1px 4px rgba(0,0,0,0.3),inset 0 1px 0 rgba(240,216,136,0.05);';
 
-  const targets = getTaskTargets();
+  const header = document.createElement('div');
+  header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;font-size:11px;color:#aaa;margin-bottom:4px;';
+  const from = document.createElement('span');
+  from.style.cssText = 'font-weight:bold;color:#f0d888;';
+  from.textContent = '\u2709\ufe0f ' + (first.by || 'Unknown');
+  const headerRight = document.createElement('span');
+  headerRight.style.cssText = 'display:flex;align-items:center;gap:6px;';
+  const time = document.createElement('span');
+  time.textContent = dto.created_at ? new Date(dto.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : '';
+  const delBtn = document.createElement('button');
+  delBtn.textContent = '\u2715';
+  delBtn.title = 'Delete';
+  delBtn.style.cssText = 'background:none;border:none;color:#888;cursor:pointer;font-size:13px;padding:0 2px;line-height:1;';
+  delBtn.onmouseenter = () => delBtn.style.color = '#e55';
+  delBtn.onmouseleave = () => delBtn.style.color = '#888';
+  delBtn.onclick = async () => {
+    delBtn.disabled = true;
+    try {
+      const headers = CONFIG.apiKey ? { Authorization: `Bearer ${CONFIG.apiKey}` } : {};
+      const res = await fetch(`${HUB_HTTP_URL}/api/queue/${encodeURIComponent(fromStation)}/${dto.id}`, { method: 'DELETE', headers });
+      if (res.ok) card.remove();
+    } catch { /* ignore */ }
+    delBtn.disabled = false;
+  };
+  headerRight.appendChild(time);
+  headerRight.appendChild(delBtn);
+  header.appendChild(from);
+  header.appendChild(headerRight);
+  card.appendChild(header);
 
-  showModal('📬 Inbox', messages.length ? '' : 'No messages.', messages.length > 0, null, null, null, (box) => {
-    // Message list
-    if (messages.length) {
-      const contentEl = box.querySelector('.modal-content');
-      if (contentEl) contentEl.remove();
+  const body = document.createElement('div');
+  body.style.cssText = 'font-size:12px;white-space:pre-wrap;word-break:break-word;margin-bottom:6px;';
+  body.textContent = first.data || '(empty)';
+  card.appendChild(body);
 
-      const list = document.createElement('div');
-      list.style.cssText = 'display:flex;flex-direction:column;gap:8px;margin-bottom:8px;';
-
-      for (const m of messages) {
-        const card = document.createElement('div');
-        card.style.cssText = 'border:1px solid rgba(255,255,255,0.1);border-left:3px solid #f0d888;border-radius:6px;padding:8px;background:linear-gradient(135deg,rgba(30,25,15,0.6),rgba(0,0,0,0.2));box-shadow:0 1px 4px rgba(0,0,0,0.3),inset 0 1px 0 rgba(240,216,136,0.05);';
-
-        const header = document.createElement('div');
-        header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;font-size:11px;color:#aaa;margin-bottom:4px;';
-        const from = document.createElement('span');
-        from.style.fontWeight = 'bold';
-        from.style.color = '#f0d888';
-        from.textContent = '\u2709\ufe0f ' + (m.from || 'Unknown');
-        const headerRight = document.createElement('span');
-        headerRight.style.cssText = 'display:flex;align-items:center;gap:6px;';
-        const time = document.createElement('span');
-        time.textContent = m.timestamp ? new Date(m.timestamp).toLocaleString() : '';
-        const delBtn = document.createElement('button');
-        delBtn.textContent = '✕';
-        delBtn.title = 'Delete message';
-        delBtn.style.cssText = 'background:none;border:none;color:#888;cursor:pointer;font-size:13px;padding:0 2px;line-height:1;';
-        delBtn.onmouseenter = () => delBtn.style.color = '#e55';
-        delBtn.onmouseleave = () => delBtn.style.color = '#888';
-        delBtn.onclick = async () => {
-          delBtn.disabled = true;
-          const inboxName = asset.station || 'inbox';
-          try {
-            const res = await fetch(`${HUB_HTTP_URL}/api/inbox/${encodeURIComponent(inboxName)}/${encodeURIComponent(m.id)}`, {
-              method: 'DELETE',
-              headers: CONFIG.apiKey ? { Authorization: `Bearer ${CONFIG.apiKey}` } : {},
-            });
-            if (res.ok) card.remove();
-          } catch { /* ignore */ }
-          delBtn.disabled = false;
-        };
-        headerRight.appendChild(time);
-        headerRight.appendChild(delBtn);
-        header.appendChild(from);
-        header.appendChild(headerRight);
-
-        const body = document.createElement('div');
-        body.style.cssText = 'font-size:12px;white-space:pre-wrap;word-break:break-word;margin-bottom:6px;';
-        body.textContent = m.text || '(empty)';
-
-        card.appendChild(header);
-        if (m.mood) {
-          const moodEl = document.createElement('div');
-          moodEl.style.cssText = 'font-size:10px;color:#aaa;font-style:italic;margin-bottom:4px;';
-          moodEl.textContent = `mood: ${m.mood}`;
-          card.appendChild(moodEl);
-        }
-        card.appendChild(body);
-
-        // Process row
-        if (targets.length > 0) {
-          const row = document.createElement('div');
-          row.style.cssText = 'display:flex;gap:4px;align-items:center;';
-          const select = buildTargetSelect(targets);
-          const processBtn = document.createElement('button');
-          processBtn.textContent = 'Process';
-          processBtn.className = 'btn btn-accent';
-          processBtn.style.cssText = 'font-size:11px;padding:2px 8px;';
-          processBtn.onclick = async () => {
-            if (!select.value) return;
-            const target = JSON.parse(select.value);
-            // Use card travel endpoint for task targets
-            if (target.type === 'task' && m.id) {
-              processBtn.disabled = true;
-              processBtn.textContent = 'Sending...';
-              const inboxName = asset.station || 'inbox';
-              const headers = { 'Content-Type': 'application/json' };
-              if (CONFIG.apiKey) headers['Authorization'] = `Bearer ${CONFIG.apiKey}`;
-              try {
-                const res = await fetch(`${HUB_HTTP_URL}/api/inbox/${encodeURIComponent(inboxName)}/${encodeURIComponent(m.id)}/process`, {
-                  method: 'POST', headers,
-                  body: JSON.stringify({ target_station: target.station }),
-                });
-                if (res.ok) {
-                  card.style.opacity = '0.3';
-                  card.style.transition = 'opacity 0.5s';
-                  processBtn.textContent = 'Sent';
-                } else {
-                  const err = await res.json().catch(() => ({}));
-                  processBtn.textContent = res.status === 409 ? 'Busy' : (err.error || 'Error');
-                  processBtn.disabled = false;
-                }
-              } catch { processBtn.textContent = 'Failed'; processBtn.disabled = false; }
-            } else {
-              processInboxMessage(target, m.text || '', m.from || 'Unknown', processBtn);
-            }
-          };
-          row.appendChild(select);
-          row.appendChild(processBtn);
-          card.appendChild(row);
-        }
-
-        list.appendChild(card);
-      }
-      box.insertBefore(list, box.querySelector('.inline-row'));
-    }
-
-    // Send form
-    const form = document.createElement('div');
-    form.className = 'inline-row';
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.placeholder = 'Add a message...';
-    input.maxLength = 2000;
-    input.className = 'form-input';
-    const btn = document.createElement('button');
-    btn.textContent = 'Add';
-    btn.className = 'btn btn-primary';
-    btn.onclick = async () => {
-      const text = input.value.trim();
-      if (!text) return;
-      btn.disabled = true;
+  if (targets.length > 0) {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;gap:4px;align-items:center;';
+    const select = buildTargetSelect(targets);
+    const fwdBtn = document.createElement('button');
+    fwdBtn.textContent = 'Forward';
+    fwdBtn.className = 'btn btn-accent';
+    fwdBtn.style.cssText = 'font-size:11px;padding:2px 8px;';
+    fwdBtn.onclick = async () => {
+      if (!select.value) return;
+      const target = JSON.parse(select.value);
+      fwdBtn.disabled = true;
+      fwdBtn.textContent = 'Forwarding...';
       try {
-        const res = await fetch(`${HUB_HTTP_URL}/api/inbox`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...(CONFIG.apiKey && { Authorization: `Bearer ${CONFIG.apiKey}` }) },
-          body: JSON.stringify({ from: 'Viewer', text }),
+        const headers = { 'Content-Type': 'application/json' };
+        if (CONFIG.apiKey) headers['Authorization'] = `Bearer ${CONFIG.apiKey}`;
+        const res = await fetch(`${HUB_HTTP_URL}/api/queue/${encodeURIComponent(fromStation)}/${dto.id}/forward`, {
+          method: 'POST', headers,
+          body: JSON.stringify({ target_station: target.station, by: 'Viewer', data: first.data || '' }),
         });
         if (res.ok) {
-          input.value = '';
-          const modal = document.getElementById('station-modal');
-          if (modal) modal.remove();
-          const prop = await fetch(`${HUB_HTTP_URL}/api/property`).then(r => r.json());
-          const refreshed = prop.assets?.find(a => a.station === 'inbox');
-          if (refreshed) showInboxMessages(refreshed);
+          card.style.opacity = '0.3';
+          card.style.transition = 'opacity 0.5s';
+          fwdBtn.textContent = 'Forwarded';
+        } else {
+          const err = await res.json().catch(() => ({}));
+          fwdBtn.textContent = err.error || 'Error';
+          fwdBtn.disabled = false;
         }
-      } catch { /* ignore */ }
-      btn.disabled = false;
+      } catch { fwdBtn.textContent = 'Failed'; fwdBtn.disabled = false; }
     };
-    input.addEventListener('keydown', e => { if (e.key === 'Enter') btn.click(); });
-    form.appendChild(input);
-    form.appendChild(btn);
+    row.appendChild(select);
+    row.appendChild(fwdBtn);
+    card.appendChild(row);
+  }
 
-    if (messages.length > 0) {
-      const clearBtn = document.createElement('button');
-      clearBtn.textContent = 'Clear all';
-      clearBtn.className = 'btn btn-danger';
-      clearBtn.onclick = async () => {
-        clearBtn.disabled = true;
-        try {
-          const res = await fetch(`${HUB_HTTP_URL}/api/inbox`, {
-            method: 'DELETE',
-            headers: CONFIG.apiKey ? { Authorization: `Bearer ${CONFIG.apiKey}` } : {},
-          });
-          if (res.ok) {
-            const modal = document.getElementById('station-modal');
-            if (modal) modal.remove();
-            const prop = await fetch(`${HUB_HTTP_URL}/api/property`).then(r => r.json());
-            const refreshed = prop.assets?.find(a => a.station === 'inbox');
-            if (refreshed) showInboxMessages(refreshed);
-          }
-        } catch { /* ignore */ }
-        clearBtn.disabled = false;
-      };
-      form.appendChild(clearBtn);
-    }
+  list.appendChild(card);
+}
 
-    box.appendChild(form);
+async function showInboxMessages(asset) {
+  const inboxStation = asset.station || 'inbox';
+  const targets = getTaskTargets();
+
+  const existing = document.getElementById('station-modal');
+  if (existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'station-modal';
+  modal.className = 'modal-backdrop';
+
+  const box = document.createElement('div');
+  box.className = 'modal-box scrollable';
+
+  const title = document.createElement('div');
+  title.className = 'modal-title';
+  title.textContent = '\ud83d\udcec Inbox';
+  box.appendChild(title);
+
+  const list = document.createElement('div');
+  list.style.cssText = 'display:flex;flex-direction:column;gap:8px;margin-bottom:8px;';
+  const statusMsg = document.createElement('div');
+  statusMsg.className = 'text-muted';
+  statusMsg.textContent = 'Loading...';
+  list.appendChild(statusMsg);
+  box.appendChild(list);
+
+  // Add form
+  const form = document.createElement('div');
+  form.className = 'inline-row';
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.placeholder = 'Add a message...';
+  input.maxLength = 2000;
+  input.className = 'form-input';
+  const addBtn = document.createElement('button');
+  addBtn.textContent = 'Add';
+  addBtn.className = 'btn btn-primary';
+  addBtn.onclick = async () => {
+    const text = input.value.trim();
+    if (!text) return;
+    addBtn.disabled = true;
+    try {
+      const headers = { 'Content-Type': 'application/json' };
+      if (CONFIG.apiKey) headers['Authorization'] = `Bearer ${CONFIG.apiKey}`;
+      const res = await fetch(`${HUB_HTTP_URL}/api/queue/${encodeURIComponent(inboxStation)}`, {
+        method: 'POST', headers,
+        body: JSON.stringify({ type: 'message', by: 'Viewer', data: text }),
+      });
+      if (res.ok) {
+        const { dto } = await res.json();
+        statusMsg.style.display = 'none';
+        renderDtoCard(dto, list, inboxStation, targets);
+        input.value = '';
+      }
+    } catch { /* ignore */ }
+    addBtn.disabled = false;
+  };
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') addBtn.click(); });
+  form.appendChild(input);
+  form.appendChild(addBtn);
+  box.appendChild(form);
+
+  modal.appendChild(box);
+  const openedAt = Date.now();
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal && Date.now() - openedAt > 400) modal.remove();
   });
+  document.addEventListener('keydown', function esc(e) {
+    if (e.key === 'Escape') { modal.remove(); document.removeEventListener('keydown', esc); }
+  });
+  document.body.appendChild(modal);
+
+  // Fetch DTO queue
+  try {
+    const headers = CONFIG.apiKey ? { Authorization: `Bearer ${CONFIG.apiKey}` } : {};
+    const res = await fetch(`${HUB_HTTP_URL}/api/queue/${encodeURIComponent(inboxStation)}`, { headers });
+    statusMsg.remove();
+    if (!res.ok) { list.innerHTML = '<div class="text-muted">Failed to load.</div>'; return; }
+    const { dtos } = await res.json();
+    if (!dtos.length) {
+      const empty = document.createElement('div');
+      empty.className = 'text-muted';
+      empty.textContent = 'No messages.';
+      list.appendChild(empty);
+    } else {
+      for (const dto of dtos) renderDtoCard(dto, list, inboxStation, targets);
+    }
+  } catch { list.innerHTML = '<div class="text-muted">Failed to load.</div>'; }
 }
 
 // --- Reception station ---
@@ -2466,6 +2453,94 @@ function showTask(asset) {
     if (e.key === 'Escape') { modal.remove(); openTaskStation = null; document.removeEventListener('keydown', esc); }
   });
   document.body.appendChild(modal);
+
+  // Async: load DTO queue for this station
+  (async () => {
+    try {
+      const headers = CONFIG.apiKey ? { Authorization: `Bearer ${CONFIG.apiKey}` } : {};
+      const res = await fetch(`${HUB_HTTP_URL}/api/queue/${encodeURIComponent(station)}`, { headers });
+      if (!res.ok) return;
+      const { dtos } = await res.json();
+      if (!dtos || !dtos.length) return;
+      if (!document.getElementById('station-modal')) return;
+
+      const section = document.createElement('div');
+      section.style.cssText = 'margin-top:12px;border-top:1px solid rgba(255,255,255,0.1);padding-top:10px;';
+
+      const sectionTitle = document.createElement('div');
+      sectionTitle.style.cssText = 'font-size:11px;color:#aaa;margin-bottom:6px;text-transform:uppercase;letter-spacing:1px;';
+      sectionTitle.textContent = `📬 DTO Queue (${dtos.length})`;
+      section.appendChild(sectionTitle);
+
+      const forwardTargets = getTaskTargets();
+
+      for (const dto of dtos) {
+        const card = document.createElement('div');
+        card.style.cssText = 'border:1px solid rgba(255,255,255,0.1);border-left:3px solid #88c0f0;border-radius:6px;padding:8px;margin-bottom:6px;background:rgba(10,20,30,0.4);';
+
+        const dtoHeader = document.createElement('div');
+        dtoHeader.style.cssText = 'font-size:10px;color:#88c0f0;margin-bottom:4px;font-weight:bold;';
+        dtoHeader.textContent = `DTO ${dto.id} (${dto.type})`;
+        card.appendChild(dtoHeader);
+
+        const trail = document.createElement('div');
+        trail.style.cssText = 'font-size:11px;color:#ccc;margin-bottom:6px;';
+        for (const entry of dto.trail) {
+          const line = document.createElement('div');
+          line.style.cssText = 'border-left:2px solid rgba(136,192,240,0.3);padding-left:6px;margin-bottom:3px;word-break:break-word;';
+          const label = document.createElement('span');
+          label.style.cssText = 'color:#88c0f0;font-weight:bold;';
+          label.textContent = `${entry.station} (${entry.by}): `;
+          const text = document.createElement('span');
+          text.textContent = entry.data;
+          line.appendChild(label);
+          line.appendChild(text);
+          trail.appendChild(line);
+        }
+        card.appendChild(trail);
+
+        if (forwardTargets.length > 0) {
+          const fwdRow = document.createElement('div');
+          fwdRow.style.cssText = 'display:flex;gap:4px;align-items:center;';
+          const fwdSelect = buildTargetSelect(forwardTargets);
+          const fwdBtn = document.createElement('button');
+          fwdBtn.textContent = 'Forward';
+          fwdBtn.className = 'btn btn-accent';
+          fwdBtn.style.cssText = 'font-size:11px;padding:2px 8px;';
+          fwdBtn.onclick = async () => {
+            if (!fwdSelect.value) return;
+            const target = JSON.parse(fwdSelect.value);
+            fwdBtn.disabled = true;
+            fwdBtn.textContent = 'Forwarding...';
+            try {
+              const fwdHeaders = { 'Content-Type': 'application/json' };
+              if (CONFIG.apiKey) fwdHeaders['Authorization'] = `Bearer ${CONFIG.apiKey}`;
+              const fwdRes = await fetch(
+                `${HUB_HTTP_URL}/api/queue/${encodeURIComponent(station)}/${dto.id}/forward`,
+                { method: 'POST', headers: fwdHeaders, body: JSON.stringify({ target_station: target.station, by: 'Viewer', data: 'Forwarded by viewer' }) }
+              );
+              if (fwdRes.ok) {
+                card.style.opacity = '0.3';
+                card.style.transition = 'opacity 0.5s';
+                fwdBtn.textContent = 'Forwarded';
+              } else {
+                const err = await fwdRes.json().catch(() => ({}));
+                fwdBtn.textContent = err.error || 'Error';
+                fwdBtn.disabled = false;
+              }
+            } catch { fwdBtn.textContent = 'Failed'; fwdBtn.disabled = false; }
+          };
+          fwdRow.appendChild(fwdSelect);
+          fwdRow.appendChild(fwdBtn);
+          card.appendChild(fwdRow);
+        }
+
+        section.appendChild(card);
+      }
+
+      box.appendChild(section);
+    } catch { /* ignore */ }
+  })();
 }
 
 async function showRemoteBoard(asset) {
