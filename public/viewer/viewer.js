@@ -1984,7 +1984,7 @@ function showReception(asset) {
   box.appendChild(title);
 
   // Copy-paste agent prompt for reception
-  const recPrompt = `Man the "${station}" reception desk. Subscribe to "${station}", then loop: check_events → read_reception("${station}") → answer the question → answer_reception("${station}", "<your HTML answer>") → repeat.`;
+  const recPrompt = `Subscribe to "${station}" and loop: check_events() → read_reception("${station}") → [YOUR TASK HERE], say() a brief comment → answer_reception("${station}", "<your answer>") → repeat.`;
   const recPromptWrap = document.createElement('div');
   recPromptWrap.className = 'section-mb';
   const recPromptLabel = document.createElement('div');
@@ -2263,7 +2263,7 @@ function showTask(asset) {
 
   // Copy-paste agent prompt (not for openclaw_task — agent spawns on demand)
   if (!asset.openclaw_task) {
-    const agentPrompt = `Do your duty. Call subscribe() then check_events() in a loop. When a task arrives, do the work and call answer_task with the result, then check_events() again.`;
+    const agentPrompt = `Subscribe to "${station}" and loop: check_events() → when a task arrives, [YOUR TASK HERE], say() a brief comment, answer_task with the result → check_events() again.`;
     const promptWrap = document.createElement('div');
     promptWrap.className = 'section-mb';
     const promptLabel = document.createElement('div');
@@ -2586,7 +2586,13 @@ function showStationInfo(asset) {
     }
   }
 
-  const setup = `HOW TO SET UP:\n\n1. In Property Editor, place furniture\n2. Set "Station" field to: "${station}"\n3. Agents walk here when calling:\n   update_state({ state: "${station}" })`;
+  const setup = 'PRO TIPS:\n\n' +
+    '• Agents walk here automatically when their\n' +
+    '  current work matches the station name.\n\n' +
+    '• Use post_to_board() to leave notes or status\n' +
+    '  updates visible to visitors.\n\n' +
+    '• Name stations after verbs (reading, planning)\n' +
+    '  so the village feels alive.';
 
   showModal(`${icon} ${station.replace(/_/g, ' ')}`, text, true, setup);
 }
@@ -2610,10 +2616,13 @@ function showSignalInfo(asset) {
     setup += '  in the CLAUDE.md file instead.';
   } else if (trigger === 'heartbeat') {
     desc += `Fires every ${interval}s. Accumulates results in a single DTO.\nWhen forwarded, a new DTO is created on next tick.`;
-    setup = 'HOW TO USE:\n\n';
-    setup += `subscribe({ name: "${station}" })\n`;
-    setup += 'Loop with check_events()\n\n';
-    setup += 'Change interval: Edit above ↑';
+    setup = 'PRO TIPS:\n\n';
+    setup += '• Great for periodic checks: RSS feeds,\n';
+    setup += '  API polling, health monitoring.\n\n';
+    setup += '• Results accumulate in one DTO — forward\n';
+    setup += '  it to archive when it gets long.\n\n';
+    setup += '• Pair with a task station to auto-process\n';
+    setup += '  each tick.';
 
     editableInterval = { station, currentInterval: interval };
   }
@@ -2874,15 +2883,13 @@ async function showActivityLog(asset) {
     }
   }
 
-  let setup = 'HOW TO SET UP:\n\n';
-  setup += '1. Place any furniture (bulletin board,\n';
-  setup += '   logbook, etc.)\n';
-  setup += '2. Name it something with "log" in it,\n';
-  setup += '   OR set custom field:\n';
-  setup += '   logger=true\n\n';
-  setup += '3. Click on it to view activity log\n\n';
-  setup += 'Logs are stored in hub memory and\n';
-  setup += 'cleared on restart.';
+  let setup = 'PRO TIPS:\n\n';
+  setup += '• Logs capture every state transition —\n';
+  setup += '  great for debugging agent behavior.\n\n';
+  setup += '• Name any furniture with "log" in it\n';
+  setup += '  to turn it into a log viewer.\n\n';
+  setup += '• Logs live in memory and reset on\n';
+  setup += '  server restart.';
 
   showModal('📋 Activity Log', content, true, setup);
 }
