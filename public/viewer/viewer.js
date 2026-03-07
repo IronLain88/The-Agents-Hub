@@ -2668,9 +2668,9 @@ function showSignalInfo(asset) {
   // Copy-paste agent prompt
   let agentPrompt;
   if (trigger === 'manual') {
-    agentPrompt = `Subscribe to "${station}" and loop: check_events() → when it fires, do your task → repeat.`;
+    agentPrompt = `Subscribe to "${station}" and loop: check_events() → when it fires, receive_dto("${station}") to get the task, do the work, forward_dto back to "${station}" with the result → repeat.`;
   } else {
-    agentPrompt = `Subscribe to "${station}" and loop: check_events() (fires every ${interval}s) → do your periodic task → repeat.`;
+    agentPrompt = `Subscribe to "${station}" and loop: check_events() (fires every ${interval}s) → receive_dto("${station}") to get data, do your periodic task, forward_dto back with result → repeat.`;
   }
 
   const fireBtn = trigger === 'manual' ? { station } : null;
@@ -2749,6 +2749,88 @@ function showSignalInfo(asset) {
     } else {
       box.appendChild(promptWrap);
     }
+
+    // Async: load DTO queue for this station
+    (async () => {
+      try {
+        const headers = CONFIG.apiKey ? { Authorization: `Bearer ${CONFIG.apiKey}` } : {};
+        const res = await fetch(`${HUB_HTTP_URL}/api/queue/${encodeURIComponent(station)}`, { headers });
+        if (!res.ok) return;
+        const { dtos } = await res.json();
+        if (!dtos || !dtos.length) return;
+
+        const forwardTargets = getTaskTargets();
+        const section = document.createElement('div');
+        section.style.cssText = 'margin-top:12px;border-top:1px solid rgba(255,255,255,0.1);padding-top:10px;';
+        const sectionTitle = document.createElement('div');
+        sectionTitle.style.cssText = 'font-size:11px;color:#aaa;margin-bottom:6px;text-transform:uppercase;letter-spacing:1px;';
+        sectionTitle.textContent = `DTO Queue (${dtos.length})`;
+        section.appendChild(sectionTitle);
+
+        for (const dto of dtos) {
+          const card = document.createElement('div');
+          card.style.cssText = 'border:1px solid rgba(255,255,255,0.1);border-left:3px solid #88c0f0;border-radius:6px;padding:8px;margin-bottom:6px;background:rgba(10,20,30,0.4);';
+          const dtoHeader = document.createElement('div');
+          dtoHeader.style.cssText = 'font-size:10px;color:#88c0f0;margin-bottom:6px;font-weight:bold;';
+          dtoHeader.textContent = `DTO ${dto.id} (${dto.type})`;
+          card.appendChild(dtoHeader);
+          for (const entry of dto.trail) {
+            const line = document.createElement('div');
+            line.style.cssText = 'border-left:2px solid rgba(136,192,240,0.3);padding-left:8px;margin-bottom:6px;';
+            const label = document.createElement('div');
+            label.style.cssText = 'color:#88c0f0;font-weight:bold;font-size:10px;margin-bottom:3px;';
+            label.textContent = `${entry.station} (${entry.by})`;
+            line.appendChild(label);
+            const text = document.createElement('div');
+            text.style.cssText = 'font-size:12px;color:#ccc;word-break:break-word;';
+            if (/<[a-z][\s\S]*>/i.test(entry.data)) {
+              text.innerHTML = sanitizeHTML(entry.data);
+            } else {
+              text.textContent = entry.data;
+            }
+            line.appendChild(text);
+            card.appendChild(line);
+          }
+          if (forwardTargets.length > 0) {
+            const fwdRow = document.createElement('div');
+            fwdRow.style.cssText = 'display:flex;gap:4px;align-items:center;margin-top:4px;';
+            const fwdSelect = buildTargetSelect(forwardTargets);
+            const fwdBtn = document.createElement('button');
+            fwdBtn.textContent = 'Forward';
+            fwdBtn.className = 'btn btn-accent';
+            fwdBtn.style.cssText = 'font-size:11px;padding:2px 8px;';
+            fwdBtn.onclick = async () => {
+              if (!fwdSelect.value) return;
+              const target = JSON.parse(fwdSelect.value);
+              fwdBtn.disabled = true;
+              fwdBtn.textContent = 'Forwarding...';
+              try {
+                const fwdHeaders = { 'Content-Type': 'application/json' };
+                if (CONFIG.apiKey) fwdHeaders['Authorization'] = `Bearer ${CONFIG.apiKey}`;
+                const fwdRes = await fetch(
+                  `${HUB_HTTP_URL}/api/queue/${encodeURIComponent(station)}/${dto.id}/forward`,
+                  { method: 'POST', headers: fwdHeaders, body: JSON.stringify({ target_station: target.station, by: 'Viewer', data: 'Forwarded by viewer' }) }
+                );
+                if (fwdRes.ok) {
+                  card.style.opacity = '0.3';
+                  card.style.transition = 'opacity 0.5s';
+                  fwdBtn.textContent = 'Forwarded';
+                } else {
+                  const err = await fwdRes.json().catch(() => ({}));
+                  fwdBtn.textContent = err.error || 'Error';
+                  fwdBtn.disabled = false;
+                }
+              } catch { fwdBtn.textContent = 'Failed'; fwdBtn.disabled = false; }
+            };
+            fwdRow.appendChild(fwdSelect);
+            fwdRow.appendChild(fwdBtn);
+            card.appendChild(fwdRow);
+          }
+          section.appendChild(card);
+        }
+        box.appendChild(section);
+      } catch { /* ignore */ }
+    })();
   }, fireBtn);
 }
 
