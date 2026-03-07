@@ -319,7 +319,7 @@ function connect() {
       }
       case "signal":
         if (msg.station) signalFlash.set(msg.station, Date.now());
-        if (msg.payload !== undefined) {
+        if (msg.payload !== undefined && msg.trigger !== 'heartbeat') {
           handleSignalWithPayload(msg);
         }
         break;
