@@ -2588,79 +2588,35 @@ function showSignalInfo(asset) {
   const station = asset.station || 'Unnamed Signal';
   const trigger = asset.trigger;
   const interval = asset.trigger_interval || 60;
-  const allowPayload = asset.allow_payload === true;
-  const hasPayload = asset.trigger_payload !== undefined;
 
-  let desc = `Trigger: ${trigger}\n`;
-  desc += `Payload: ${allowPayload ? '✓ Enabled' : '✗ Disabled'}${hasPayload && allowPayload ? ' (configured)' : ''}\n`;
-  desc += '\n';
+  let desc = `Trigger: ${trigger}\n\n`;
 
   let setup = '';
   let editableInterval = null;
 
   if (trigger === 'manual') {
-    desc += 'Fires manually via API or git hooks.';
+    desc += 'Fires manually via API, viewer, or git hooks.\nCreates a DTO in the station queue on each fire.';
     setup = 'HOW TO USE:\n\n';
-    setup += '1. Tell your agent:\n';
-    setup += `   "Listen to ${station} and [task] when\n`;
-    setup += '   it fires"\n\n';
-    setup += '2. Or add to .md agent file:\n';
-    setup += `   subscribe({ name: "${station}" })\n`;
-    setup += '   In a loop: check_events()\n\n';
-    setup += '3. Fire the signal:\n';
+    setup += '1. Type a payload below and hit Fire\n';
+    setup += '2. Or fire via API:\n';
     setup += `   POST /api/signals/fire\n`;
-    setup += `   {"station": "${station}"`;
-    if (allowPayload) {
-      setup += `,\n    "payload": {"dynamic": "data"}`;
-    }
-    setup += `}\n\n`;
-    setup += '4. Or use git hook:\n';
-    setup += '   .git/hooks/post-commit calls the API\n\n';
-    if (allowPayload) {
-      setup += 'DUAL PAYLOAD SYSTEM:\n';
-      setup += '• signal_payload: Default payload (above)\n';
-      setup += '  Always sent if configured\n';
-      setup += '• dynamic_payload: API request payload\n';
-      setup += '  Sent when provided in API call\n';
-      setup += '• Agent receives both in check_events()\n\n';
-      setup += 'Example received payload:\n';
-      setup += '{\n';
-      if (hasPayload) {
-        setup += '  "signal_payload": <default data>,\n';
-      }
-      setup += '  "dynamic_payload": <API data>\n';
-      setup += '}\n\n';
-    }
-    setup += 'TIP: For .md agents, add this pattern:\n';
+    setup += `   {"station": "${station}",\n`;
+    setup += `    "payload": {"data": "your task"}}\n\n`;
+    setup += 'AGENT PATTERN:\n';
     setup += '━━━━━━━━━━━━━━━━\n';
     setup += `subscribe({ name: "${station}" })\n`;
     setup += 'while (true) {\n';
     setup += '  check_events()  // waits for signal\n';
-    setup += '  // do your task here\n';
+    setup += `  receive_dto("${station}")  // get the DTO\n`;
+    setup += '  // do your task\n';
+    setup += `  forward_dto(id, "${station}", "${station}", result)\n`;
     setup += '}';
   } else if (trigger === 'heartbeat') {
     desc += `Fires automatically every ${interval} second${interval !== 1 ? 's' : ''}.`;
     setup = 'HOW TO USE:\n\n';
-    setup += '1. Tell your agent:\n';
-    setup += `   "Every ${interval} seconds, check [thing]\n`;
-    setup += `   by subscribing to ${station}"\n\n`;
-    setup += '2. Or add to .md agent file:\n';
-    setup += `   subscribe({ name: "${station}" })\n`;
-    setup += '   Loop with check_events()\n\n';
-    setup += '3. Change interval: Edit above ↑\n\n';
-    if (allowPayload && hasPayload) {
-      setup += 'PAYLOAD:\n';
-      setup += '• Signal has configured payload\n';
-      setup += '• Hub must set ALLOW_SIGNAL_PAYLOADS=true\n';
-      setup += '• Payload sent with each heartbeat\n\n';
-    }
-    setup += 'TIP: For .md agents, add this pattern:\n';
-    setup += '━━━━━━━━━━━━━━━━\n';
     setup += `subscribe({ name: "${station}" })\n`;
-    setup += 'while (true) {\n';
-    setup += '  check_events()  // fires every interval\n';
-    setup += '  // run periodic task here\n';
-    setup += '}';
+    setup += 'Loop with check_events()\n\n';
+    setup += 'Change interval: Edit above ↑';
 
     editableInterval = { station, currentInterval: interval };
   }
@@ -2957,176 +2913,26 @@ function showModal(title, content, scrollable = false, setupInstructions = null,
   box.appendChild(titleEl);
   box.appendChild(contentEl);
 
-  // Add payload toggle for signal assets
-  if (signalAsset && signalAsset.trigger) {
-    const payloadContainer = document.createElement('div');
-    payloadContainer.className = 'settings-row';
-
-    const checkbox = document.createElement('input');
-    checkbox.type = 'checkbox';
-    checkbox.id = 'payload-checkbox';
-    checkbox.checked = signalAsset.allow_payload === true;
-    checkbox.className = 'form-checkbox';
-
-    const label = document.createElement('label');
-    label.htmlFor = 'payload-checkbox';
-    label.className = 'text-label';
-    label.textContent = 'Allow payload';
-
-    const statusMsg = document.createElement('span');
-    statusMsg.className = 'text-status';
-
-    // Payload editor (shown when checkbox is checked)
-    const payloadEditorContainer = document.createElement('div');
-    payloadEditorContainer.className = 'section-mt';
-    payloadEditorContainer.style.display = signalAsset.allow_payload ? 'block' : 'none';
-
+  // Payload textarea for manual signal assets
+  let _payloadTextarea = null;
+  if (signalAsset && signalAsset.trigger === 'manual') {
+    const payloadWrap = document.createElement('div');
+    payloadWrap.className = 'section-mt';
     const payloadLabel = document.createElement('div');
     payloadLabel.className = 'text-muted';
-    payloadLabel.style.fontSize = '11px';
-    payloadLabel.style.marginBottom = '4px';
-    payloadLabel.textContent = signalAsset.trigger === 'manual'
-      ? 'Default payload (sent with every fire):'
-      : 'Payload (JSON or text):';
-
-    const payloadTextarea = document.createElement('textarea');
-    payloadTextarea.rows = 4;
-    payloadTextarea.placeholder = '{"key": "value"} or simple text';
+    payloadLabel.style.cssText = 'font-size:11px;margin-bottom:4px;';
+    payloadLabel.textContent = 'Payload (sent with fire):';
+    _payloadTextarea = document.createElement('textarea');
+    _payloadTextarea.rows = 3;
+    _payloadTextarea.placeholder = 'Enter task or data to send...';
     const currentPayload = signalAsset.trigger_payload;
-    payloadTextarea.value = currentPayload !== undefined
+    _payloadTextarea.value = currentPayload !== undefined
       ? (typeof currentPayload === 'string' ? currentPayload : JSON.stringify(currentPayload, null, 2))
       : '';
-    payloadTextarea.className = 'form-textarea';
-
-    const payloadSaveBtn = document.createElement('button');
-    payloadSaveBtn.textContent = 'Save Payload';
-    payloadSaveBtn.className = 'btn btn-accent section-mt';
-
-    const payloadStatusMsg = document.createElement('span');
-    payloadStatusMsg.className = 'text-status';
-
-    payloadSaveBtn.onclick = async () => {
-      try {
-        const propResponse = await fetch('/api/property');
-        const property = await propResponse.json();
-        const asset = property.assets.find(a => a.id === signalAsset.id);
-
-        if (!asset) {
-          payloadStatusMsg.textContent = '❌ Asset not found';
-          payloadStatusMsg.style.color = '#d04040';
-          return;
-        }
-
-        const val = payloadTextarea.value.trim();
-        if (val === '') {
-          delete asset.trigger_payload;
-        } else {
-          try {
-            asset.trigger_payload = JSON.parse(val);
-          } catch {
-            asset.trigger_payload = val;
-          }
-        }
-
-        const saveResponse = await fetch('/api/property', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...(CONFIG.apiKey && { Authorization: `Bearer ${CONFIG.apiKey}` }) },
-          body: JSON.stringify(property)
-        });
-
-        if (saveResponse.ok) {
-          signalAsset.trigger_payload = asset.trigger_payload;
-          payloadStatusMsg.textContent = '✓ Saved';
-          payloadStatusMsg.style.color = '#60d060';
-        } else {
-          payloadStatusMsg.textContent = '❌ Save failed';
-          payloadStatusMsg.style.color = '#d04040';
-        }
-      } catch (err) {
-        payloadStatusMsg.textContent = '❌ Error';
-        payloadStatusMsg.style.color = '#d04040';
-      }
-
-      setTimeout(() => payloadStatusMsg.textContent = '', 3000);
-    };
-
-    payloadEditorContainer.appendChild(payloadLabel);
-    payloadEditorContainer.appendChild(payloadTextarea);
-    payloadEditorContainer.appendChild(payloadSaveBtn);
-    payloadEditorContainer.appendChild(payloadStatusMsg);
-
-    checkbox.onchange = async () => {
-      // Show warning when enabling payloads
-      if (checkbox.checked) {
-        const confirmed = await showPayloadWarning();
-        if (!confirmed) {
-          checkbox.checked = false;
-          return;
-        }
-      }
-
-      try {
-        // Fetch current property
-        const propResponse = await fetch('/api/property');
-        const property = await propResponse.json();
-
-        // Find and update the asset
-        const asset = property.assets.find(a => a.id === signalAsset.id);
-        if (!asset) {
-          statusMsg.textContent = '❌ Asset not found';
-          statusMsg.style.color = '#d04040';
-          return;
-        }
-
-        if (checkbox.checked) {
-          asset.allow_payload = true;
-          statusMsg.textContent = '✓ Enabled';
-          statusMsg.style.color = '#60d060';
-          payloadEditorContainer.style.display = 'block';
-        } else {
-          delete asset.allow_payload;
-          delete asset.trigger_payload;
-          statusMsg.textContent = '✓ Disabled';
-          statusMsg.style.color = '#60d060';
-          payloadEditorContainer.style.display = 'none';
-          payloadTextarea.value = '';
-        }
-
-        // Save updated property
-        const saveResponse = await fetch('/api/property', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...(CONFIG.apiKey && { Authorization: `Bearer ${CONFIG.apiKey}` }) },
-          body: JSON.stringify(property)
-        });
-
-        if (saveResponse.ok) {
-          // Update local reference
-          signalAsset.allow_payload = checkbox.checked ? true : undefined;
-          // Update description text
-          contentEl.textContent = contentEl.textContent.replace(
-            /Payload: [^\n]+/,
-            `Payload: ${checkbox.checked ? '✓ Enabled' : '✗ Disabled'}`
-          );
-        } else {
-          statusMsg.textContent = '❌ Save failed';
-          statusMsg.style.color = '#d04040';
-          checkbox.checked = !checkbox.checked;
-        }
-      } catch (err) {
-        statusMsg.textContent = '❌ Error';
-        statusMsg.style.color = '#d04040';
-        checkbox.checked = !checkbox.checked;
-      }
-
-      setTimeout(() => statusMsg.textContent = '', 3000);
-    };
-
-    payloadContainer.appendChild(checkbox);
-    payloadContainer.appendChild(label);
-    payloadContainer.appendChild(statusMsg);
-
-    box.appendChild(payloadContainer);
-    box.appendChild(payloadEditorContainer);
+    _payloadTextarea.className = 'form-textarea';
+    payloadWrap.appendChild(payloadLabel);
+    payloadWrap.appendChild(_payloadTextarea);
+    box.appendChild(payloadWrap);
   }
 
   // Add editable interval for heartbeat signals
@@ -3205,7 +3011,7 @@ function showModal(title, content, scrollable = false, setupInstructions = null,
     fireContainer.className = 'settings-row';
 
     const fireButton = document.createElement('button');
-    fireButton.textContent = '🔥 Fire Signal';
+    fireButton.textContent = 'Fire';
     fireButton.className = 'btn btn-fire';
 
     const fireStatus = document.createElement('span');
@@ -3215,21 +3021,28 @@ function showModal(title, content, scrollable = false, setupInstructions = null,
       fireButton.disabled = true;
       fireButton.style.opacity = '0.6';
       try {
+        const body = { station: fireBtn.station };
+        if (_payloadTextarea) {
+          const val = _payloadTextarea.value.trim();
+          if (val) {
+            try { body.payload = JSON.parse(val); } catch { body.payload = { data: val }; }
+          }
+        }
         const response = await fetch('/api/signals/fire', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...(CONFIG.apiKey && { Authorization: `Bearer ${CONFIG.apiKey}` }) },
-          body: JSON.stringify({ station: fireBtn.station })
+          body: JSON.stringify(body)
         });
         if (response.ok) {
-          fireStatus.textContent = '✓ Fired!';
+          fireStatus.textContent = 'Fired!';
           fireStatus.style.color = '#60d060';
         } else {
           const err = await response.json().catch(() => ({}));
-          fireStatus.textContent = `❌ ${err.error || 'Failed'}`;
+          fireStatus.textContent = err.error || 'Failed';
           fireStatus.style.color = '#d04040';
         }
       } catch {
-        fireStatus.textContent = '❌ Error';
+        fireStatus.textContent = 'Error';
         fireStatus.style.color = '#d04040';
       }
       fireButton.disabled = false;
