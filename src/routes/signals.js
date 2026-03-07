@@ -35,9 +35,7 @@ export default function signalRoutes(ctx) {
       message.payload = mergedPayload;
     }
 
-    broadcast(message);
-
-    // Create a DTO in the station's queue with the signal data
+    // Create a DTO in the station's queue BEFORE broadcasting
     if (asset) {
       let dtoData = asset.instructions || "Signal received";
       if (payload) {
@@ -60,6 +58,8 @@ export default function signalRoutes(ctx) {
       savePropertyToDisk().catch(e => console.error("[hub] Failed to save:", e));
       console.log(`[hub] Signal "${station}": DTO ${dto.id} created`);
     }
+
+    broadcast(message);
 
     const payloadInfo = (payload !== undefined || asset?.trigger_payload !== undefined)
       ? (allowPayload ? " (with payload)" : " (payload blocked)")
