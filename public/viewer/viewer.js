@@ -2603,21 +2603,11 @@ function showSignalInfo(asset) {
 
   if (trigger === 'manual') {
     desc += 'Fires manually via API, viewer, or git hooks.\nCreates a DTO in the station queue on each fire.';
-    setup = 'HOW TO USE:\n\n';
-    setup += '1. Type a payload below and hit Fire\n';
-    setup += '2. Or fire via API:\n';
-    setup += `   POST /api/signals/fire\n`;
-    setup += `   {"station": "${station}",\n`;
-    setup += `    "payload": {"data": "your task"}}\n\n`;
-    setup += 'AGENT PATTERN:\n';
-    setup += '━━━━━━━━━━━━━━━━\n';
-    setup += `subscribe({ name: "${station}" })\n`;
-    setup += 'while (true) {\n';
-    setup += '  check_events()  // waits for signal\n';
-    setup += `  receive_dto("${station}")  // get the DTO\n`;
-    setup += '  // do your task\n';
-    setup += `  forward_dto(id, "${station}", "${station}", result)\n`;
-    setup += '}';
+    setup = 'PRO TIPS:\n\n';
+    setup += '• Instead of [INSERT TASK], reference a .md file\n';
+    setup += '  with detailed instructions for the agent.\n\n';
+    setup += '• Leave [INSERT TASK] empty and define everything\n';
+    setup += '  in the CLAUDE.md file instead.';
   } else if (trigger === 'heartbeat') {
     desc += `Fires every ${interval}s. Accumulates results in a single DTO.\nWhen forwarded, a new DTO is created on next tick.`;
     setup = 'HOW TO USE:\n\n';
@@ -2631,7 +2621,7 @@ function showSignalInfo(asset) {
   // Copy-paste agent prompt
   let agentPrompt;
   if (trigger === 'manual') {
-    agentPrompt = `Subscribe to "${station}" and loop: check_events() → when it fires, receive_dto("${station}") to get the task, do the work, say() a brief summary in your speech bubble, then forward_dto back to "${station}" with the full result → repeat.`;
+    agentPrompt = `Subscribe to "${station}" and loop: check_events() → when it fires, receive_dto("${station}") to get the task, [INSERT TASK], say() a brief summary in your speech bubble, then forward_dto back to "${station}" with the full result → repeat.`;
   } else {
     agentPrompt = `Subscribe to "${station}" and loop: check_events() (fires every ${interval}s) → receive_dto("${station}", dto_id) to get data, do your periodic task, say() a brief summary, then forward_dto back with result → repeat.`;
   }
@@ -3069,7 +3059,7 @@ function showModal(title, content, scrollable = false, setupInstructions = null,
 
     const toggleLink = document.createElement('div');
     toggleLink.className = 'toggle-link';
-    toggleLink.textContent = '► Show setup instructions';
+    toggleLink.textContent = '► Pro tips';
 
     const setupEl = document.createElement('pre');
     setupEl.className = 'setup-content';
@@ -3078,7 +3068,7 @@ function showModal(title, content, scrollable = false, setupInstructions = null,
     let expanded = false;
     toggleLink.onclick = () => {
       expanded = !expanded;
-      toggleLink.textContent = expanded ? '▼ Hide setup instructions' : '► Show setup instructions';
+      toggleLink.textContent = expanded ? '▼ Pro tips' : '► Pro tips';
       setupEl.style.display = expanded ? 'block' : 'none';
     };
 
