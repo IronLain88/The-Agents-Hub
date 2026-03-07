@@ -2624,7 +2624,7 @@ function showSignalInfo(asset) {
   // Copy-paste agent prompt
   let agentPrompt;
   if (trigger === 'manual') {
-    agentPrompt = `Subscribe to "${station}" and loop: check_events() → when it fires, receive_dto("${station}") to get the task, do the work, forward_dto back to "${station}" with the result → repeat.`;
+    agentPrompt = `Subscribe to "${station}" and loop: check_events() → when it fires, receive_dto("${station}") to get the task, do the work, say() a brief summary in your speech bubble, then forward_dto back to "${station}" with the full result → repeat.`;
   } else {
     agentPrompt = `Subscribe to "${station}" and loop: check_events() (fires every ${interval}s) → receive_dto("${station}") to get data, do your periodic task, forward_dto back with result → repeat.`;
   }
