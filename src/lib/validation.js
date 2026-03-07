@@ -137,7 +137,7 @@ export const logEntrySchema = z.object({
 // Board post validation
 export const boardPostSchema = z.object({
   data: z.string().min(1, "Data cannot be empty").max(10000, "Data cannot exceed 10KB"),
-  type: z.enum(["text", "markdown", "json"]).optional(),
+  type: z.enum(["text", "markdown", "json", "html"]).optional(),
 });
 
 // Inbox message validation

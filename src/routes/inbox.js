@@ -3,7 +3,7 @@ import * as schemas from "../lib/validation.js";
 
 export default function inboxRoutes(ctx) {
   const router = Router();
-  const { requireAuth, stateLimiter, getProperty, broadcast, savePropertyToDisk } = ctx;
+  const { requireAuth, stateLimiter, getProperty, broadcast, savePropertyToDisk, API_KEY, ENABLE_GET_INBOX } = ctx;
 
   function findInbox(name) {
     const station = name || "inbox";
@@ -42,6 +42,34 @@ export default function inboxRoutes(ctx) {
     console.log(`[hub] Inbox "${asset.station}" message from "${from}" (${messages.length} total)`);
     res.json({ ok: true, count: messages.length });
   }
+  // GET /api/hello?from=X&text=Y&key=Z — GET-based inbox delivery (for clients that can't POST)
+  if (ENABLE_GET_INBOX) {
+    router.get("/api/hello", stateLimiter, (req, res) => {
+      const { from, text, key } = req.query;
+      if (API_KEY && key !== API_KEY) return res.status(401).json({ error: "Unauthorized" });
+      if (!from || !text) return res.status(400).json({ error: "from and text are required" });
+
+      const asset = findInbox(undefined);
+      if (!asset) return res.status(404).json({ error: 'No inbox found — add an asset with station="inbox" to your property' });
+
+      let messages = [];
+      try {
+        if (asset.content?.data) messages = JSON.parse(asset.content.data);
+        if (!Array.isArray(messages)) messages = [];
+      } catch { messages = []; }
+
+      const id = Math.random().toString(36).slice(2, 8);
+      messages.push({ id, from, text, timestamp: new Date().toISOString() });
+      while (messages.length > 50) messages.shift();
+
+      asset.content = { type: "json", data: JSON.stringify(messages), publishedAt: new Date().toISOString() };
+      broadcast({ type: "property_update", property: getProperty() });
+      savePropertyToDisk().catch(e => console.error("[hub] Failed to save property:", e));
+      console.log(`[hub] GET inbox message from "${from}" (${messages.length} total)`);
+      res.json({ ok: true, message: "delivered" });
+    });
+  }
+
   router.post("/api/inbox", requireAuth, stateLimiter, handleInboxPost);
   router.post("/api/inbox/:name", requireAuth, stateLimiter, handleInboxPost);
 
