@@ -42,13 +42,39 @@ export default function inboxRoutes(ctx) {
     console.log(`[hub] Inbox "${asset.station}" message from "${from}" (${messages.length} total)`);
     res.json({ ok: true, count: messages.length });
   }
-  // GET /api/hello?from=X&text=Y&key=Z — GET-based inbox delivery (for clients that can't POST)
+  // GET /api/hello?from=X&text=Y&key=Z[&station=task_table] — GET-based delivery for clients that can't POST
   if (ENABLE_GET_INBOX) {
     router.get("/api/hello", stateLimiter, (req, res) => {
-      const { from, text, key } = req.query;
+      const { from, text, key, station } = req.query;
       if (API_KEY && key !== API_KEY) return res.status(401).json({ error: "Unauthorized" });
       if (!from || !text) return res.status(400).json({ error: "from and text are required" });
 
+      const currentProperty = getProperty();
+
+      // If station param given, try to place as task
+      if (station) {
+        const taskAsset = currentProperty?.assets?.find(a => a.station === station && a.task);
+        if (!taskAsset) return res.status(404).json({ error: `Task station "${station}" not found` });
+
+        let state = { status: "idle", result: null };
+        try { if (taskAsset.content?.data) state = JSON.parse(taskAsset.content.data); } catch {}
+        if (state.status !== "idle") return res.status(409).json({ error: "Task station is busy" });
+
+        state.status = "pending";
+        state.result = null;
+        state.claimedBy = null;
+        state.startedAt = new Date().toISOString();
+        state.prompt = `From ${from}: ${text}`;
+        taskAsset.content = { type: "task", data: JSON.stringify(state) };
+
+        broadcast({ type: "signal", station, trigger: "manual", timestamp: Date.now(), payload: { station, instructions: taskAsset.instructions } });
+        broadcast({ type: "property_update", property: currentProperty });
+        savePropertyToDisk().catch(e => console.error("[hub] Failed to save property:", e));
+        console.log(`[hub] GET task "${station}" from "${from}"`);
+        return res.json({ ok: true, message: "delivered", target: station });
+      }
+
+      // Default: write to inbox
       const asset = findInbox(undefined);
       if (!asset) return res.status(404).json({ error: 'No inbox found — add an asset with station="inbox" to your property' });
 
@@ -63,10 +89,10 @@ export default function inboxRoutes(ctx) {
       while (messages.length > 50) messages.shift();
 
       asset.content = { type: "json", data: JSON.stringify(messages), publishedAt: new Date().toISOString() };
-      broadcast({ type: "property_update", property: getProperty() });
+      broadcast({ type: "property_update", property: currentProperty });
       savePropertyToDisk().catch(e => console.error("[hub] Failed to save property:", e));
       console.log(`[hub] GET inbox message from "${from}" (${messages.length} total)`);
-      res.json({ ok: true, message: "delivered" });
+      res.json({ ok: true, message: "delivered", target: "inbox" });
     });
   }
 
