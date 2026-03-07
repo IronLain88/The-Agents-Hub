@@ -618,10 +618,11 @@ function drawAssetIndicators(asset, propX, propY) {
     } catch {}
     const key = `${asset.position.x},${asset.position.y}`;
     const hasAgent = stationOccupants.has(key);
+    const dtoCount = property?.queues?.[asset.station]?.length || 0;
     if (status === 'pending') {
       drawFloatingIcon(cx, py, asset.openclaw_task ? '🔵' : '❗', 0);
-    } else if (status === 'done') {
-      drawFloatingIcon(cx, py, '✅', 0);
+    } else if (dtoCount > 0) {
+      drawFloatingIcon(cx, py, '✅', dtoCount);
     } else if (hasAgent && status === 'idle') {
       drawFloatingIcon(cx, py, '🟢', 0);
     } else if (asset.openclaw_task && status === 'idle') {
@@ -2419,44 +2420,40 @@ function showTask(asset) {
       if (!dtos || !dtos.length) return;
       if (!document.getElementById('station-modal')) return;
 
-      const section = document.createElement('div');
-      section.style.cssText = 'margin-top:12px;border-top:1px solid rgba(255,255,255,0.1);padding-top:10px;';
-
-      const sectionTitle = document.createElement('div');
-      sectionTitle.style.cssText = 'font-size:11px;color:#aaa;margin-bottom:6px;text-transform:uppercase;letter-spacing:1px;';
-      sectionTitle.textContent = `📬 DTO Queue (${dtos.length})`;
-      section.appendChild(sectionTitle);
-
       const forwardTargets = getTaskTargets();
+      const activeDtoId = state.status === 'pending' ? state.dtoId : null;
 
-      for (const dto of dtos) {
+      function buildDtoCard(dto, isActive) {
         const card = document.createElement('div');
-        card.style.cssText = 'border:1px solid rgba(255,255,255,0.1);border-left:3px solid #88c0f0;border-radius:6px;padding:8px;margin-bottom:6px;background:rgba(10,20,30,0.4);';
+        const accentColor = isActive ? '#f0d888' : '#88c0f0';
+        card.style.cssText = `border:1px solid rgba(255,255,255,0.1);border-left:3px solid ${accentColor};border-radius:6px;padding:8px;margin-bottom:6px;background:rgba(10,20,30,0.4);`;
 
         const dtoHeader = document.createElement('div');
-        dtoHeader.style.cssText = 'font-size:10px;color:#88c0f0;margin-bottom:4px;font-weight:bold;';
+        dtoHeader.style.cssText = `font-size:10px;color:${accentColor};margin-bottom:6px;font-weight:bold;`;
         dtoHeader.textContent = `DTO ${dto.id} (${dto.type})`;
         card.appendChild(dtoHeader);
 
-        const trail = document.createElement('div');
-        trail.style.cssText = 'font-size:11px;color:#ccc;margin-bottom:6px;';
         for (const entry of dto.trail) {
           const line = document.createElement('div');
-          line.style.cssText = 'border-left:2px solid rgba(136,192,240,0.3);padding-left:6px;margin-bottom:3px;word-break:break-word;';
-          const label = document.createElement('span');
-          label.style.cssText = 'color:#88c0f0;font-weight:bold;';
-          label.textContent = `${entry.station} (${entry.by}): `;
-          const text = document.createElement('span');
-          text.textContent = entry.data;
+          line.style.cssText = `border-left:2px solid rgba(136,192,240,0.3);padding-left:8px;margin-bottom:6px;`;
+          const label = document.createElement('div');
+          label.style.cssText = `color:${accentColor};font-weight:bold;font-size:10px;margin-bottom:3px;`;
+          label.textContent = `${entry.station} (${entry.by})`;
           line.appendChild(label);
+          const text = document.createElement('div');
+          text.style.cssText = 'font-size:12px;color:#ccc;word-break:break-word;';
+          if (/<[a-z][\s\S]*>/i.test(entry.data)) {
+            text.innerHTML = sanitizeHTML(entry.data);
+          } else {
+            text.textContent = entry.data;
+          }
           line.appendChild(text);
-          trail.appendChild(line);
+          card.appendChild(line);
         }
-        card.appendChild(trail);
 
-        if (forwardTargets.length > 0) {
+        if (!isActive && forwardTargets.length > 0) {
           const fwdRow = document.createElement('div');
-          fwdRow.style.cssText = 'display:flex;gap:4px;align-items:center;';
+          fwdRow.style.cssText = 'display:flex;gap:4px;align-items:center;margin-top:4px;';
           const fwdSelect = buildTargetSelect(forwardTargets);
           const fwdBtn = document.createElement('button');
           fwdBtn.textContent = 'Forward';
@@ -2490,10 +2487,33 @@ function showTask(asset) {
           card.appendChild(fwdRow);
         }
 
-        section.appendChild(card);
+        return card;
       }
 
-      box.appendChild(section);
+      const activeDto = activeDtoId ? dtos.find(d => d.id === activeDtoId) : null;
+      const queueDtos = activeDtoId ? dtos.filter(d => d.id !== activeDtoId) : dtos;
+
+      if (activeDto) {
+        const activeSection = document.createElement('div');
+        activeSection.style.cssText = 'margin-top:12px;border-top:1px solid rgba(255,255,255,0.1);padding-top:10px;';
+        const activeTitle = document.createElement('div');
+        activeTitle.style.cssText = 'font-size:11px;color:#f0d888;margin-bottom:6px;text-transform:uppercase;letter-spacing:1px;';
+        activeTitle.textContent = '⚡ Active Task';
+        activeSection.appendChild(activeTitle);
+        activeSection.appendChild(buildDtoCard(activeDto, true));
+        box.appendChild(activeSection);
+      }
+
+      if (queueDtos.length > 0) {
+        const queueSection = document.createElement('div');
+        queueSection.style.cssText = 'margin-top:12px;border-top:1px solid rgba(255,255,255,0.1);padding-top:10px;';
+        const queueTitle = document.createElement('div');
+        queueTitle.style.cssText = 'font-size:11px;color:#aaa;margin-bottom:6px;text-transform:uppercase;letter-spacing:1px;';
+        queueTitle.textContent = `📬 DTO Queue (${queueDtos.length})`;
+        queueSection.appendChild(queueTitle);
+        for (const dto of queueDtos) queueSection.appendChild(buildDtoCard(dto, false));
+        box.appendChild(queueSection);
+      }
     } catch { /* ignore */ }
   })();
 }
