@@ -1654,79 +1654,79 @@ async function showWelcomeBoard(asset) {
 }
 
 function showArchive(asset) {
-  let cards = [];
-  try {
-    if (asset.content?.data) {
-      const parsed = typeof asset.content.data === 'string' ? JSON.parse(asset.content.data) : asset.content.data;
-      if (Array.isArray(parsed)) cards = parsed;
-    }
-  } catch {}
+  const station = asset.station || 'archive';
 
-  showModal('\ud83d\udce6 Archive', cards.length ? '' : 'No archived cards.', cards.length > 0, null, null, null, (box) => {
-    if (!cards.length) return;
+  showModal('\ud83d\udce6 Archive', 'Loading...', true, null, null, null, async (box) => {
     const contentEl = box.querySelector('.modal-content');
-    if (contentEl) contentEl.remove();
 
-    const list = document.createElement('div');
-    list.style.cssText = 'display:flex;flex-direction:column;gap:8px;margin-bottom:8px;';
+    try {
+      const headers = CONFIG.apiKey ? { Authorization: `Bearer ${CONFIG.apiKey}` } : {};
+      const res = await fetch(`${HUB_HTTP_URL}/api/queue/${encodeURIComponent(station)}`, { headers });
+      if (!res.ok) { if (contentEl) contentEl.textContent = 'Failed to load archive.'; return; }
+      const { dtos } = await res.json();
 
-    for (const c of cards) {
-      const card = document.createElement('div');
-      card.style.cssText = 'border-left:3px solid #f0d888;border-radius:6px;padding:8px;background:linear-gradient(135deg,rgba(30,25,15,0.6),rgba(0,0,0,0.2));';
+      if (!dtos || !dtos.length) { if (contentEl) contentEl.textContent = 'Archive is empty.'; return; }
+      if (contentEl) contentEl.remove();
 
-      const header = document.createElement('div');
-      header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;font-size:11px;color:#aaa;margin-bottom:4px;';
-      const from = document.createElement('span');
-      from.style.cssText = 'font-weight:bold;color:#f0d888;';
-      from.textContent = '\u2709\ufe0f ' + (c.from || 'Unknown');
-      const headerRight = document.createElement('span');
-      headerRight.style.cssText = 'display:flex;align-items:center;gap:6px;';
-      const time = document.createElement('span');
-      time.textContent = c.completedAt ? new Date(c.completedAt).toLocaleString() : '';
-      const delBtn = document.createElement('button');
-      delBtn.textContent = '✕';
-      delBtn.title = 'Delete card';
-      delBtn.style.cssText = 'background:none;border:none;color:#888;cursor:pointer;font-size:13px;padding:0 2px;line-height:1;';
-      delBtn.onmouseenter = () => delBtn.style.color = '#e55';
-      delBtn.onmouseleave = () => delBtn.style.color = '#888';
-      delBtn.onclick = async () => {
-        delBtn.disabled = true;
-        // Recalculate index from current DOM order
-        const currentCards = [...list.children];
-        const idx = currentCards.indexOf(card);
-        if (idx === -1) return;
-        try {
-          const res = await fetch(`${HUB_HTTP_URL}/api/archive/${idx}`, {
-            method: 'DELETE',
-            headers: CONFIG.apiKey ? { Authorization: `Bearer ${CONFIG.apiKey}` } : {},
-          });
-          if (res.ok) card.remove();
-        } catch { /* ignore */ }
-        delBtn.disabled = false;
-      };
-      headerRight.appendChild(time);
-      headerRight.appendChild(delBtn);
-      header.appendChild(from);
-      header.appendChild(headerRight);
+      const list = document.createElement('div');
+      list.style.cssText = 'display:flex;flex-direction:column;gap:8px;margin-bottom:8px;';
 
-      const text = document.createElement('div');
-      text.style.cssText = 'font-size:12px;white-space:pre-wrap;word-break:break-word;margin-bottom:6px;';
-      text.textContent = c.text || '';
+      for (const dto of dtos) {
+        const card = document.createElement('div');
+        card.style.cssText = 'border:1px solid rgba(255,255,255,0.1);border-left:3px solid #f0d888;border-radius:6px;padding:8px;background:linear-gradient(135deg,rgba(30,25,15,0.6),rgba(0,0,0,0.2));';
 
-      card.appendChild(header);
-      card.appendChild(text);
+        const header = document.createElement('div');
+        header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;font-size:10px;color:#aaa;margin-bottom:6px;';
+        const idSpan = document.createElement('span');
+        idSpan.style.cssText = 'font-weight:bold;color:#f0d888;';
+        idSpan.textContent = `DTO ${dto.id} (${dto.type})`;
+        const headerRight = document.createElement('span');
+        headerRight.style.cssText = 'display:flex;align-items:center;gap:6px;';
+        const time = document.createElement('span');
+        time.textContent = dto.created_at ? new Date(dto.created_at).toLocaleString() : '';
+        const delBtn = document.createElement('button');
+        delBtn.textContent = '\u2715';
+        delBtn.title = 'Delete';
+        delBtn.style.cssText = 'background:none;border:none;color:#888;cursor:pointer;font-size:13px;padding:0 2px;line-height:1;';
+        delBtn.onmouseenter = () => delBtn.style.color = '#e55';
+        delBtn.onmouseleave = () => delBtn.style.color = '#888';
+        delBtn.onclick = async () => {
+          delBtn.disabled = true;
+          try {
+            const h = CONFIG.apiKey ? { Authorization: `Bearer ${CONFIG.apiKey}` } : {};
+            const r = await fetch(`${HUB_HTTP_URL}/api/queue/${encodeURIComponent(station)}/${dto.id}`, { method: 'DELETE', headers: h });
+            if (r.ok) card.remove();
+          } catch { /* ignore */ }
+          delBtn.disabled = false;
+        };
+        headerRight.appendChild(time);
+        headerRight.appendChild(delBtn);
+        header.appendChild(idSpan);
+        header.appendChild(headerRight);
+        card.appendChild(header);
 
-      if (c.result) {
-        const result = document.createElement('div');
-        result.className = 'rich-content';
-        result.style.cssText = 'font-size:11px;border-top:1px solid rgba(255,255,255,0.1);padding-top:6px;';
-        result.innerHTML = sanitizeHTML(c.result);
-        card.appendChild(result);
+        for (const entry of dto.trail) {
+          const line = document.createElement('div');
+          line.style.cssText = 'border-left:2px solid rgba(240,216,136,0.3);padding-left:8px;margin-bottom:6px;';
+          const label = document.createElement('div');
+          label.style.cssText = 'color:#f0d888;font-weight:bold;font-size:10px;margin-bottom:3px;';
+          label.textContent = `${entry.station} (${entry.by})`;
+          line.appendChild(label);
+          const text = document.createElement('div');
+          text.style.cssText = 'font-size:12px;color:#ccc;word-break:break-word;';
+          if (/<[a-z][\s\S]*>/i.test(entry.data)) {
+            text.innerHTML = sanitizeHTML(entry.data);
+          } else {
+            text.textContent = entry.data;
+          }
+          line.appendChild(text);
+          card.appendChild(line);
+        }
+
+        list.appendChild(card);
       }
-
-      list.appendChild(card);
-    }
-    box.insertBefore(list, box.querySelector('.inline-row'));
+      box.insertBefore(list, box.querySelector('.inline-row'));
+    } catch { if (contentEl) contentEl.textContent = 'Failed to load archive.'; }
   });
 }
 
