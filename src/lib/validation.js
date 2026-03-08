@@ -134,32 +134,6 @@ export const logEntrySchema = z.object({
   isNote: z.boolean().optional(),
 });
 
-// Board post validation
-export const boardPostSchema = z.object({
-  data: z.string().min(1, "Data cannot be empty").max(10000, "Data cannot exceed 10KB"),
-  type: z.enum(["text", "markdown", "json", "html"]).optional(),
-});
-
-// Inbox message validation
-function stripHtml(s) {
-  return s.replace(/[<>]/g, "");
-}
-
-export const inboxMessageSchema = z.object({
-  from: z.string().min(1, "From cannot be empty").max(100, "From name too long").transform(stripHtml),
-  text: z.string().min(1, "Text cannot be empty").max(2000, "Text cannot exceed 2000 characters").transform(stripHtml),
-  mood: z.string().max(100, "Mood too long").transform(stripHtml).optional(),
-});
-
-// Process inbox message to task station
-export const processInboxSchema = z.object({
-  target_station: z.string().min(1).max(100),
-});
-
-// Archive a completed card from a task station
-export const archiveForwardSchema = z.object({
-  from_station: z.string().min(1).max(100),
-});
 
 // Sprite filename validation
 export const spriteFilenameSchema = z.string()

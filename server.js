@@ -16,8 +16,6 @@ import agentRoutes from "./src/routes/agents.js";
 import signalRoutes from "./src/routes/signals.js";
 import receptionRoutes from "./src/routes/reception.js";
 import taskRoutes from "./src/routes/tasks.js";
-import boardRoutes from "./src/routes/boards.js";
-import inboxRoutes from "./src/routes/inbox.js";
 import queueRoutes from "./src/routes/queue.js";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -37,7 +35,6 @@ const BUILT_IN_STATES = [
   { name: "writing_text", group: "creating",   color: "#60d0f0" },
   { name: "generating",   group: "creating",   color: "#f060c0" },
   { name: "inbox",        group: "communicating", color: "#5a9ef0" },
-  { name: "remote_board", group: "communicating", color: "#9a6ef0" },
   { name: "idle",         group: "idle",       color: "#808080" },
 ];
 
@@ -46,14 +43,11 @@ const HOST = process.env.HOST || "localhost";
 const NODE_ENV = process.env.NODE_ENV || "development";
 const IS_PRODUCTION = NODE_ENV === "production";
 const ALLOW_SIGNAL_PAYLOADS = process.env.ALLOW_SIGNAL_PAYLOADS === "true";
-const ENABLE_REMOTE_BOARDS = process.env.ENABLE_REMOTE_BOARDS === "true";
-const ENABLE_BOARD = process.env.ENABLE_BOARD === "true";
 const ENABLE_GET_INBOX = process.env.ENABLE_GET_INBOX !== "false";
 
 console.log(`[hub] Environment: ${NODE_ENV}`);
 console.log(`[hub] Signal payloads: ${ALLOW_SIGNAL_PAYLOADS ? 'ENABLED' : 'DISABLED (set ALLOW_SIGNAL_PAYLOADS=true to enable)'}`);
-console.log(`[hub] Remote boards: ${ENABLE_REMOTE_BOARDS ? 'ENABLED' : 'DISABLED (set ENABLE_REMOTE_BOARDS=true to enable)'}`);
-if (ENABLE_BOARD) console.log("[hub] Bulletin board endpoints enabled");
+
 
 const app = express();
 
@@ -272,10 +266,8 @@ function buildWelcome() {
   const assets = currentProperty?.assets || [];
   const stations = [];
   const signals = [];
-  const boards = [];
   const tasks = [];
   const openclawTasks = [];
-  let inboxCount = 0;
 
   for (const a of assets) {
     if (!a.station) continue;
@@ -287,24 +279,20 @@ function buildWelcome() {
     }
     if (a.trigger) {
       signals.push(`${a.name || a.station} (${a.trigger})`);
-    } else if (a.station.startsWith("inbox") && a.content?.data) {
-      try {
-        const msgs = JSON.parse(a.content.data);
-        if (Array.isArray(msgs)) inboxCount += msgs.length;
-      } catch {}
+    } else if (!a.welcome && !a.archive) {
       if (!stations.includes(a.station)) stations.push(a.station);
-    } else {
-      if (!stations.includes(a.station)) stations.push(a.station);
-      if (a.content?.data) boards.push(a.name || a.station);
     }
   }
+
+  const queues = currentProperty?.queues || {};
+  const inboxCount = (queues.inbox || []).length;
 
   const others = [];
   for (const [, entry] of agents) {
     others.push({ name: entry.agent_name, state: entry.state });
   }
 
-  return { stations, signals, boards, tasks, openclawTasks, inbox: inboxCount, agents: others };
+  return { stations, signals, tasks, openclawTasks, inbox: inboxCount, agents: others };
 }
 
 function buildDefaultWelcomeText() {
@@ -331,7 +319,6 @@ function buildDefaultWelcomeText() {
     for (const t of w.openclawTasks) lines.push(`  - ${t}`);
   }
   if (w.signals.length > 0) lines.push(`**Signals:** ${w.signals.join(", ")}`);
-  if (w.boards.length > 0) lines.push(`**Boards with content:** ${w.boards.join(", ")}`);
   const archiveStations = (currentProperty?.assets || []).filter(a => a.archive).map(a => a.name || a.station || "archive");
   if (archiveStations.length > 0) lines.push(`**Archive:** ${archiveStations.join(", ")}`);
   lines.push(`**Total assets:** ${(currentProperty?.assets || []).length}`);
@@ -377,7 +364,7 @@ const ctx = {
   agentPreviousState, assignCharacter, buildWelcome, spriteStore,
   PROPERTIES_DIR, DATA_DIR, TILESETS_DIR, IMAGES_DIR, CUTOUTS_DIR,
   IS_PRODUCTION, PROP_W, PROP_H, API_KEY,
-  ALLOW_SIGNAL_PAYLOADS, ENABLE_BOARD, ENABLE_REMOTE_BOARDS, ENABLE_GET_INBOX,
+  ALLOW_SIGNAL_PAYLOADS, ENABLE_GET_INBOX,
   __dirname,
 };
 
@@ -388,8 +375,6 @@ app.use(agentRoutes(ctx));
 app.use(signalRoutes(ctx));
 app.use(receptionRoutes(ctx));
 app.use(taskRoutes(ctx));
-app.use(boardRoutes(ctx));
-app.use(inboxRoutes(ctx));
 app.use(queueRoutes(ctx));
 
 // --- HTTP + WebSocket server ---

@@ -587,25 +587,17 @@ function drawAssetIndicators(asset, propX, propY) {
     return;
   }
 
-  // Archive: floating icon + count badge
-  if (asset.archive && asset.content?.data) {
-    let cards = [];
-    try {
-      const d = typeof asset.content.data === 'string' ? JSON.parse(asset.content.data) : asset.content.data;
-      if (Array.isArray(d)) cards = d;
-    } catch {}
-    if (cards.length) drawFloatingIcon(cx, py, '📦', cards.length, '#c8a84e');
+  // Archive: floating icon + count badge (from queue)
+  if (asset.archive) {
+    const queueCount = (property?.queues?.[asset.station] || []).length;
+    if (queueCount) drawFloatingIcon(cx, py, '📦', queueCount, '#c8a84e');
     return;
   }
 
-  // Inbox: floating icon + count badge
-  if (asset.station === 'inbox' && asset.content?.data) {
-    let msgs = [];
-    try {
-      const d = typeof asset.content.data === 'string' ? JSON.parse(asset.content.data) : asset.content.data;
-      if (Array.isArray(d)) msgs = d;
-    } catch {}
-    if (msgs.length) drawFloatingIcon(cx, py, '📬', msgs.length, '#e33');
+  // Inbox: floating icon + count badge (from queue)
+  if (asset.station === 'inbox') {
+    const queueCount = (property?.queues?.inbox || []).length;
+    if (queueCount) drawFloatingIcon(cx, py, '📬', queueCount, '#e33');
     return;
   }
 
@@ -672,13 +664,6 @@ function drawAssetIndicators(asset, propX, propY) {
     return;
   }
 
-  // Board content dot
-  if (asset.content) {
-    ctx.fillStyle = 'rgba(255, 215, 0, 0.9)';
-    ctx.beginPath();
-    ctx.arc(px + pw - 3, py + 3, 2.5, 0, Math.PI * 2);
-    ctx.fill();
-  }
 }
 
 function drawTileLayer(tiles, ox, oy) {
@@ -1247,8 +1232,6 @@ async function handleCanvasClick(e) {
     showArchive(asset);
   } else if (asset.station === 'inbox') {
     showInboxMessages(asset);
-  } else if (asset.remote_url && asset.remote_station) {
-    await showRemoteBoard(asset);
   } else if (asset.station) {
     showStationInfo(asset);
   } else if (asset.sprite?.image) {
@@ -2558,30 +2541,6 @@ function showTask(asset) {
   loadDtoQueue();
 }
 
-async function showRemoteBoard(asset) {
-  const station = asset.station || asset.name || 'Remote Board';
-  try {
-    const res = await fetch(`${HUB_HTTP_URL}/api/board/${encodeURIComponent(asset.station)}/remote`);
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ error: res.statusText }));
-      showModal(`📡 ${station}`, err.error || 'Failed to fetch remote board', false);
-      return;
-    }
-    const board = await res.json();
-    let text = `Remote: ${asset.remote_url}\nStation: ${asset.remote_station}\n\n`;
-    if (board.content) {
-      text += `--- Content (${board.content.type || 'text'}) ---\n${board.content.data}`;
-      if (board.content.publishedAt) text += `\n\nPublished: ${board.content.publishedAt}`;
-    } else {
-      text += 'No content posted yet.';
-    }
-    if (board.log) text += `\n\n--- Activity Log ---\n${board.log}`;
-    showModal(`📡 ${station}`, text, true);
-  } catch (err) {
-    showModal(`📡 ${station}`, `Failed to fetch remote board: ${err.message}`, false);
-  }
-}
-
 function showStationInfo(asset) {
   const station = asset.station;
   const desc = STATION_DESCRIPTIONS[station] || "A station where agents perform work.";
@@ -2605,20 +2564,11 @@ function showStationInfo(asset) {
   }
 
   // Board content
-  if (asset.content?.data) {
-    const data = asset.content.data;
-    const type = asset.content.type || 'text';
-    text += `\n\n── Board ──\n${typeof data === 'string' ? data : JSON.stringify(data, null, 2)}`;
-    if (asset.content.publishedAt) {
-      text += `\n\nUpdated: ${new Date(asset.content.publishedAt).toLocaleString()}`;
-    }
-  }
-
   const setup = 'PRO TIPS:\n\n' +
     '• Agents walk here automatically when their\n' +
     '  current work matches the station name.\n\n' +
-    '• Use post_to_board() to leave notes or status\n' +
-    '  updates visible to visitors.\n\n' +
+    '• Use create_dto() to leave data at any station,\n' +
+    '  or forward_dto() to send it along a pipeline.\n\n' +
     '• Name stations after verbs (reading, planning)\n' +
     '  so the village feels alive.';
 
@@ -2664,46 +2614,7 @@ function showSignalInfo(asset) {
   }
 
   const fireBtn = trigger === 'manual' ? { station } : null;
-  const hasBoard = !!asset.content?.data;
-  showModal(`🔔 ${station}`, desc, hasBoard, setup, editableInterval, asset, (box) => {
-    // Show board content if agent has posted to this signal
-    if (hasBoard) {
-      const boardWrap = document.createElement('div');
-      boardWrap.className = 'section-mb';
-      const boardLabel = document.createElement('div');
-      boardLabel.className = 'text-muted';
-      boardLabel.style.cssText = 'font-size:11px;margin-bottom:6px;';
-      const age = asset.content.publishedAt ? ' — ' + new Date(asset.content.publishedAt).toLocaleString() : '';
-      boardLabel.textContent = `Board content (${asset.content.type || 'text'})${age}`;
-
-      if (asset.content.type === 'html') {
-        const iframe = document.createElement('iframe');
-        iframe.sandbox = 'allow-same-origin';
-        iframe.style.cssText = 'width:100%;border:1px solid rgba(255,255,255,0.1);border-radius:6px;background:#1a1a2e;min-height:120px;';
-        iframe.srcdoc = asset.content.data;
-        iframe.onload = () => {
-          const h = iframe.contentDocument?.documentElement?.scrollHeight;
-          if (h) iframe.style.height = Math.min(h + 4, 400) + 'px';
-        };
-        boardWrap.appendChild(boardLabel);
-        boardWrap.appendChild(iframe);
-      } else {
-        const boardPre = document.createElement('pre');
-        boardPre.className = 'modal-content';
-        boardPre.style.cssText = 'max-height:200px;overflow:auto;margin:0;';
-        boardPre.textContent = asset.content.data;
-        boardWrap.appendChild(boardLabel);
-        boardWrap.appendChild(boardPre);
-      }
-
-      const titleEl = box.querySelector('.modal-title');
-      if (titleEl && titleEl.nextSibling) {
-        box.insertBefore(boardWrap, titleEl.nextSibling);
-      } else {
-        box.appendChild(boardWrap);
-      }
-    }
-
+  showModal(`🔔 ${station}`, desc, true, setup, editableInterval, asset, (box) => {
     // Agent prompt section
     const promptWrap = document.createElement('div');
     promptWrap.className = 'section-mb';
