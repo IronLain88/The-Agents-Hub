@@ -2292,6 +2292,34 @@ function showTask(asset) {
     promptWrap.appendChild(promptLabel);
     promptWrap.appendChild(promptRow);
     box.appendChild(promptWrap);
+
+    // Pro tips
+    const allTaskStations = (property?.assets || []).filter(a => a.task && !a.openclaw_task).map(a => a.station);
+    const multiExample = allTaskStations.length > 1
+      ? allTaskStations.map(s => `subscribe("${s}")`).join(', then ') + ' — one agent handles all of them.'
+      : 'Subscribe to multiple task stations — one agent handles whichever fires first.';
+    const tipsWrap = document.createElement('div');
+    tipsWrap.className = 'section-mb';
+    const toggleLink = document.createElement('div');
+    toggleLink.style.cssText = 'color:#888;font-size:11px;cursor:pointer;user-select:none;';
+    toggleLink.textContent = '► Pro tips';
+    const tipsContent = document.createElement('pre');
+    tipsContent.className = 'modal-content';
+    tipsContent.style.cssText = 'display:none;margin-top:6px;font-size:11px;white-space:pre-wrap;';
+    tipsContent.textContent = 'PRO TIPS:\n\n' +
+      '• Multi-task: ' + multiExample + '\n\n' +
+      '• Instead of [YOUR TASK HERE], reference a .md\n' +
+      '  file with detailed instructions.\n\n' +
+      '• Leave [YOUR TASK HERE] empty and define\n' +
+      '  everything in the CLAUDE.md file instead.';
+    toggleLink.onclick = () => {
+      const show = tipsContent.style.display === 'none';
+      tipsContent.style.display = show ? '' : 'none';
+      toggleLink.textContent = show ? '▼ Pro tips' : '► Pro tips';
+    };
+    tipsWrap.appendChild(toggleLink);
+    tipsWrap.appendChild(tipsContent);
+    box.appendChild(tipsWrap);
   }
 
   const isOcTask = !!asset.openclaw_task;
