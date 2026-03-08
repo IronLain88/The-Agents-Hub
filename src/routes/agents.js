@@ -125,19 +125,10 @@ export default function agentRoutes(ctx) {
       if (!isIdle) occupiedStations.add(entry.state);
     }
 
-    let inboxCount = 0;
-    let inboxLatest = null;
-    for (const asset of currentProperty?.assets || []) {
-      if (asset.station?.startsWith("inbox") && asset.content?.data) {
-        try {
-          const msgs = JSON.parse(asset.content.data);
-          if (Array.isArray(msgs)) inboxCount += msgs.length;
-        } catch {}
-        if (asset.content.publishedAt && (!inboxLatest || asset.content.publishedAt > inboxLatest)) {
-          inboxLatest = asset.content.publishedAt;
-        }
-      }
-    }
+    const queues = currentProperty?.queues || {};
+    const inboxDtos = queues.inbox || [];
+    const inboxCount = inboxDtos.length;
+    const inboxLatest = inboxDtos.length > 0 ? inboxDtos[inboxDtos.length - 1].created_at : null;
 
     const recent = activityLog.slice(-5).reverse().map(e => ({
       agent: e.agent_name, state: e.state, detail: e.detail, t: e.timestamp,
