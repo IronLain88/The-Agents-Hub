@@ -100,10 +100,22 @@ export default function taskRoutes(ctx) {
       return res.status(409).json({ error: "No pending task" });
     }
 
-    state.status = "done";
-    state.result = validation.data.result;
-    state.completedAt = new Date().toISOString();
-    asset.content = { type: "task", data: JSON.stringify(state) };
+    const result = validation.data.result;
+
+    // If a DTO triggered this task, append result to its trail and reset to idle automatically
+    if (state.dtoId && currentProperty.queues) {
+      const queue = currentProperty.queues[station] || [];
+      const dto = queue.find(d => d.id === state.dtoId);
+      if (dto) {
+        dto.trail.push({ station, by: state.claimedBy || "Agent", at: new Date().toISOString(), data: result });
+      }
+      asset.content = { type: "task", data: JSON.stringify({ status: "idle", result: null }) };
+    } else {
+      state.status = "done";
+      state.result = result;
+      state.completedAt = new Date().toISOString();
+      asset.content = { type: "task", data: JSON.stringify(state) };
+    }
 
     broadcast({ type: "property_update", property: currentProperty });
     savePropertyToDisk().catch(e => console.error("[hub] Failed to save property:", e));

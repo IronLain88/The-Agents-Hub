@@ -319,7 +319,7 @@ function connect() {
       }
       case "signal":
         if (msg.station) signalFlash.set(msg.station, Date.now());
-        if (msg.payload !== undefined) {
+        if (msg.payload !== undefined && msg.trigger !== 'heartbeat') {
           handleSignalWithPayload(msg);
         }
         break;
@@ -618,10 +618,11 @@ function drawAssetIndicators(asset, propX, propY) {
     } catch {}
     const key = `${asset.position.x},${asset.position.y}`;
     const hasAgent = stationOccupants.has(key);
+    const dtoCount = property?.queues?.[asset.station]?.length || 0;
     if (status === 'pending') {
       drawFloatingIcon(cx, py, asset.openclaw_task ? '🔵' : '❗', 0);
-    } else if (status === 'done') {
-      drawFloatingIcon(cx, py, '✅', 0);
+    } else if (dtoCount > 0) {
+      drawFloatingIcon(cx, py, '✅', dtoCount);
     } else if (hasAgent && status === 'idle') {
       drawFloatingIcon(cx, py, '🟢', 0);
     } else if (asset.openclaw_task && status === 'idle') {
@@ -1285,6 +1286,11 @@ function getTaskTargets() {
     if (!a.trigger || a.trigger !== 'manual' || a.task) continue;
     targets.push({ type: 'signal', station: a.station, label: `${a.station.replace(/_/g, ' ')} (signal)`, busy: false });
   }
+  // Archive stations
+  for (const a of property?.assets || []) {
+    if (!a.archive || !a.station) continue;
+    targets.push({ type: 'archive', station: a.station, label: `${a.station.replace(/_/g, ' ')} (archive)`, busy: false });
+  }
   return targets;
 }
 
@@ -1648,79 +1654,79 @@ async function showWelcomeBoard(asset) {
 }
 
 function showArchive(asset) {
-  let cards = [];
-  try {
-    if (asset.content?.data) {
-      const parsed = typeof asset.content.data === 'string' ? JSON.parse(asset.content.data) : asset.content.data;
-      if (Array.isArray(parsed)) cards = parsed;
-    }
-  } catch {}
+  const station = asset.station || 'archive';
 
-  showModal('\ud83d\udce6 Archive', cards.length ? '' : 'No archived cards.', cards.length > 0, null, null, null, (box) => {
-    if (!cards.length) return;
+  showModal('\ud83d\udce6 Archive', 'Loading...', true, null, null, null, async (box) => {
     const contentEl = box.querySelector('.modal-content');
-    if (contentEl) contentEl.remove();
 
-    const list = document.createElement('div');
-    list.style.cssText = 'display:flex;flex-direction:column;gap:8px;margin-bottom:8px;';
+    try {
+      const headers = CONFIG.apiKey ? { Authorization: `Bearer ${CONFIG.apiKey}` } : {};
+      const res = await fetch(`${HUB_HTTP_URL}/api/queue/${encodeURIComponent(station)}`, { headers });
+      if (!res.ok) { if (contentEl) contentEl.textContent = 'Failed to load archive.'; return; }
+      const { dtos } = await res.json();
 
-    for (const c of cards) {
-      const card = document.createElement('div');
-      card.style.cssText = 'border-left:3px solid #f0d888;border-radius:6px;padding:8px;background:linear-gradient(135deg,rgba(30,25,15,0.6),rgba(0,0,0,0.2));';
+      if (!dtos || !dtos.length) { if (contentEl) contentEl.textContent = 'Archive is empty.'; return; }
+      if (contentEl) contentEl.remove();
 
-      const header = document.createElement('div');
-      header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;font-size:11px;color:#aaa;margin-bottom:4px;';
-      const from = document.createElement('span');
-      from.style.cssText = 'font-weight:bold;color:#f0d888;';
-      from.textContent = '\u2709\ufe0f ' + (c.from || 'Unknown');
-      const headerRight = document.createElement('span');
-      headerRight.style.cssText = 'display:flex;align-items:center;gap:6px;';
-      const time = document.createElement('span');
-      time.textContent = c.completedAt ? new Date(c.completedAt).toLocaleString() : '';
-      const delBtn = document.createElement('button');
-      delBtn.textContent = '✕';
-      delBtn.title = 'Delete card';
-      delBtn.style.cssText = 'background:none;border:none;color:#888;cursor:pointer;font-size:13px;padding:0 2px;line-height:1;';
-      delBtn.onmouseenter = () => delBtn.style.color = '#e55';
-      delBtn.onmouseleave = () => delBtn.style.color = '#888';
-      delBtn.onclick = async () => {
-        delBtn.disabled = true;
-        // Recalculate index from current DOM order
-        const currentCards = [...list.children];
-        const idx = currentCards.indexOf(card);
-        if (idx === -1) return;
-        try {
-          const res = await fetch(`${HUB_HTTP_URL}/api/archive/${idx}`, {
-            method: 'DELETE',
-            headers: CONFIG.apiKey ? { Authorization: `Bearer ${CONFIG.apiKey}` } : {},
-          });
-          if (res.ok) card.remove();
-        } catch { /* ignore */ }
-        delBtn.disabled = false;
-      };
-      headerRight.appendChild(time);
-      headerRight.appendChild(delBtn);
-      header.appendChild(from);
-      header.appendChild(headerRight);
+      const list = document.createElement('div');
+      list.style.cssText = 'display:flex;flex-direction:column;gap:8px;margin-bottom:8px;';
 
-      const text = document.createElement('div');
-      text.style.cssText = 'font-size:12px;white-space:pre-wrap;word-break:break-word;margin-bottom:6px;';
-      text.textContent = c.text || '';
+      for (const dto of dtos) {
+        const card = document.createElement('div');
+        card.style.cssText = 'border:1px solid rgba(255,255,255,0.1);border-left:3px solid #f0d888;border-radius:6px;padding:8px;background:linear-gradient(135deg,rgba(30,25,15,0.6),rgba(0,0,0,0.2));';
 
-      card.appendChild(header);
-      card.appendChild(text);
+        const header = document.createElement('div');
+        header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;font-size:10px;color:#aaa;margin-bottom:6px;';
+        const idSpan = document.createElement('span');
+        idSpan.style.cssText = 'font-weight:bold;color:#f0d888;';
+        idSpan.textContent = `DTO ${dto.id} (${dto.type})`;
+        const headerRight = document.createElement('span');
+        headerRight.style.cssText = 'display:flex;align-items:center;gap:6px;';
+        const time = document.createElement('span');
+        time.textContent = dto.created_at ? new Date(dto.created_at).toLocaleString() : '';
+        const delBtn = document.createElement('button');
+        delBtn.textContent = '\u2715';
+        delBtn.title = 'Delete';
+        delBtn.style.cssText = 'background:none;border:none;color:#888;cursor:pointer;font-size:13px;padding:0 2px;line-height:1;';
+        delBtn.onmouseenter = () => delBtn.style.color = '#e55';
+        delBtn.onmouseleave = () => delBtn.style.color = '#888';
+        delBtn.onclick = async () => {
+          delBtn.disabled = true;
+          try {
+            const h = CONFIG.apiKey ? { Authorization: `Bearer ${CONFIG.apiKey}` } : {};
+            const r = await fetch(`${HUB_HTTP_URL}/api/queue/${encodeURIComponent(station)}/${dto.id}`, { method: 'DELETE', headers: h });
+            if (r.ok) card.remove();
+          } catch { /* ignore */ }
+          delBtn.disabled = false;
+        };
+        headerRight.appendChild(time);
+        headerRight.appendChild(delBtn);
+        header.appendChild(idSpan);
+        header.appendChild(headerRight);
+        card.appendChild(header);
 
-      if (c.result) {
-        const result = document.createElement('div');
-        result.className = 'rich-content';
-        result.style.cssText = 'font-size:11px;border-top:1px solid rgba(255,255,255,0.1);padding-top:6px;';
-        result.innerHTML = sanitizeHTML(c.result);
-        card.appendChild(result);
+        for (const entry of dto.trail) {
+          const line = document.createElement('div');
+          line.style.cssText = 'border-left:2px solid rgba(240,216,136,0.3);padding-left:8px;margin-bottom:6px;';
+          const label = document.createElement('div');
+          label.style.cssText = 'color:#f0d888;font-weight:bold;font-size:10px;margin-bottom:3px;';
+          label.textContent = `${entry.station} (${entry.by})`;
+          line.appendChild(label);
+          const text = document.createElement('div');
+          text.style.cssText = 'font-size:12px;color:#ccc;word-break:break-word;';
+          if (/<[a-z][\s\S]*>/i.test(entry.data)) {
+            text.innerHTML = sanitizeHTML(entry.data);
+          } else {
+            text.textContent = entry.data;
+          }
+          line.appendChild(text);
+          card.appendChild(line);
+        }
+
+        list.appendChild(card);
       }
-
-      list.appendChild(card);
-    }
-    box.insertBefore(list, box.querySelector('.inline-row'));
+      box.insertBefore(list, box.querySelector('.inline-row'));
+    } catch { if (contentEl) contentEl.textContent = 'Failed to load archive.'; }
   });
 }
 
@@ -1978,7 +1984,7 @@ function showReception(asset) {
   box.appendChild(title);
 
   // Copy-paste agent prompt for reception
-  const recPrompt = `Man the "${station}" reception desk. Subscribe to "${station}", then loop: check_events → read_reception("${station}") → answer the question → answer_reception("${station}", "<your HTML answer>") → repeat.`;
+  const recPrompt = `Subscribe to "${station}" and loop: check_events() → read_reception("${station}") → [YOUR TASK HERE], say() a brief comment → answer_reception("${station}", "<your answer>") → repeat.`;
   const recPromptWrap = document.createElement('div');
   recPromptWrap.className = 'section-mb';
   const recPromptLabel = document.createElement('div');
@@ -2153,7 +2159,6 @@ function showTask(asset) {
   box.appendChild(title);
 
   const isAuthed = !!CONFIG.apiKey;
-  const canRun = asset.task_public !== false || isAuthed;
 
   // Task instructions — editable for authed users
   if (asset.instructions || isAuthed) {
@@ -2258,7 +2263,7 @@ function showTask(asset) {
 
   // Copy-paste agent prompt (not for openclaw_task — agent spawns on demand)
   if (!asset.openclaw_task) {
-    const agentPrompt = `Do your duty. Call subscribe() then check_events() in a loop. When a task arrives, do the work and call answer_task with the result, then check_events() again.`;
+    const agentPrompt = `Subscribe to "${station}" and loop: check_events() → when a task arrives, [YOUR TASK HERE], say() a brief comment, answer_task with the result → check_events() again.`;
     const promptWrap = document.createElement('div');
     promptWrap.className = 'section-mb';
     const promptLabel = document.createElement('div');
@@ -2287,72 +2292,93 @@ function showTask(asset) {
     promptWrap.appendChild(promptLabel);
     promptWrap.appendChild(promptRow);
     box.appendChild(promptWrap);
+
+    // Pro tips
+    const allTaskStations = (property?.assets || []).filter(a => a.task && !a.openclaw_task).map(a => a.station);
+    const multiExample = allTaskStations.length > 1
+      ? allTaskStations.map(s => `subscribe("${s}")`).join(', then ') + ' — one agent handles all of them.'
+      : 'Subscribe to multiple task stations — one agent handles whichever fires first.';
+    const tipsWrap = document.createElement('div');
+    tipsWrap.className = 'section-mb';
+    const toggleLink = document.createElement('div');
+    toggleLink.style.cssText = 'color:#888;font-size:11px;cursor:pointer;user-select:none;';
+    toggleLink.textContent = '► Pro tips';
+    const tipsContent = document.createElement('pre');
+    tipsContent.className = 'modal-content';
+    tipsContent.style.cssText = 'display:none;margin-top:6px;font-size:11px;white-space:pre-wrap;';
+    tipsContent.textContent = 'PRO TIPS:\n\n' +
+      '• Multi-task: ' + multiExample + '\n\n' +
+      '• Instead of [YOUR TASK HERE], reference a .md\n' +
+      '  file with detailed instructions.\n\n' +
+      '• Leave [YOUR TASK HERE] empty and define\n' +
+      '  everything in the CLAUDE.md file instead.';
+    toggleLink.onclick = () => {
+      const show = tipsContent.style.display === 'none';
+      tipsContent.style.display = show ? '' : 'none';
+      toggleLink.textContent = show ? '▼ Pro tips' : '► Pro tips';
+    };
+    tipsWrap.appendChild(toggleLink);
+    tipsWrap.appendChild(tipsContent);
+    box.appendChild(tipsWrap);
   }
 
   const isOcTask = !!asset.openclaw_task;
 
-  // Helper: build Run button
-  function buildRunUI() {
-    const btn = document.createElement('button');
-    btn.textContent = 'Run';
-    btn.className = 'btn btn-primary';
-    btn.onclick = async () => {
-      btn.disabled = true;
-      btn.textContent = 'Starting...';
-      try {
-        const headers = { 'Content-Type': 'application/json' };
-        if (CONFIG.apiKey) headers['Authorization'] = `Bearer ${CONFIG.apiKey}`;
-        const res = await fetch(`${HUB_HTTP_URL}/api/task/${encodeURIComponent(station)}/run`, {
-          method: 'POST', headers, body: JSON.stringify({}),
-        });
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({ error: res.statusText }));
-          btn.textContent = err.error || 'Error';
-          btn.disabled = false;
-        }
-      } catch {
-        btn.textContent = 'Failed';
-        btn.disabled = false;
-      }
-    };
-    return btn;
-  }
-
-  if (!isOpen && !isOcTask) {
-    const closed = document.createElement('div');
-    closed.className = 'text-muted section-pad';
-    closed.textContent = 'No agent on duty \u2014 task will run when one arrives.';
-    box.appendChild(closed);
-  } else if (state.status === 'idle') {
+  if (state.status === 'idle') {
     if (isOpen) {
       const info = document.createElement('div');
       info.className = 'text-green section-mb';
       info.textContent = `${agentNames} on duty`;
       box.appendChild(info);
+    } else if (!isOcTask) {
+      const closed = document.createElement('div');
+      closed.className = 'text-muted section-pad';
+      closed.textContent = 'No agent on duty \u2014 task will run when one arrives.';
+      box.appendChild(closed);
     }
 
-    if (canRun) {
-      box.appendChild(buildRunUI());
-    } else {
-      const locked = document.createElement('div');
-      locked.className = 'text-muted text-italic';
-      locked.textContent = 'Login required to run this task.';
-      box.appendChild(locked);
-    }
+    const addForm = document.createElement('div');
+    addForm.className = 'inline-row';
+    const addInput = document.createElement('input');
+    addInput.type = 'text';
+    addInput.placeholder = 'Add a task...';
+    addInput.maxLength = 2000;
+    addInput.className = 'form-input';
+    const addBtn = document.createElement('button');
+    addBtn.textContent = 'Add';
+    addBtn.className = 'btn btn-primary';
+    addBtn.onclick = async () => {
+      const text = addInput.value.trim();
+      if (!text) return;
+      addBtn.disabled = true;
+      try {
+        const headers = { 'Content-Type': 'application/json' };
+        if (CONFIG.apiKey) headers['Authorization'] = `Bearer ${CONFIG.apiKey}`;
+        const res = await fetch(`${HUB_HTTP_URL}/api/queue/${encodeURIComponent(station)}`, {
+          method: 'POST', headers,
+          body: JSON.stringify({ type: 'task', by: 'Viewer', data: text }),
+        });
+        if (res.ok) {
+          addInput.value = '';
+          addBtn.textContent = 'Added';
+          setTimeout(() => { addBtn.textContent = 'Add'; addBtn.disabled = false; }, 2000);
+          loadDtoQueue();
+        } else {
+          addBtn.textContent = 'Failed';
+          addBtn.disabled = false;
+        }
+      } catch { addBtn.textContent = 'Failed'; addBtn.disabled = false; }
+    };
+    addInput.addEventListener('keydown', e => { if (e.key === 'Enter') addBtn.click(); });
+    addForm.appendChild(addInput);
+    addForm.appendChild(addBtn);
+    box.appendChild(addForm);
   } else if (state.status === 'pending') {
-    // Show card origin if present
-    if (state.card) {
-      const cardEl = document.createElement('div');
-      cardEl.style.cssText = 'border-left:3px solid #f0d888;padding:6px 10px;margin-bottom:10px;background:rgba(240,216,136,0.06);border-radius:0 6px 6px 0;font-size:12px;';
-      const cardHeader = document.createElement('div');
-      cardHeader.style.cssText = 'color:#f0d888;font-weight:bold;margin-bottom:2px;';
-      cardHeader.textContent = `\u2709\ufe0f ${state.card.from || 'Unknown'} (${state.card.source || 'inbox'})`;
-      const cardText = document.createElement('div');
-      cardText.style.cssText = 'color:#ccc;white-space:pre-wrap;word-break:break-word;';
-      cardText.textContent = state.card.text || '';
-      cardEl.appendChild(cardHeader);
-      cardEl.appendChild(cardText);
-      box.appendChild(cardEl);
+    if (state.prompt) {
+      const promptEl = document.createElement('div');
+      promptEl.style.cssText = 'border-left:3px solid #f0d888;padding:6px 10px;margin-bottom:10px;background:rgba(240,216,136,0.06);border-radius:0 6px 6px 0;font-size:12px;color:#ccc;white-space:pre-wrap;word-break:break-word;';
+      promptEl.textContent = state.prompt;
+      box.appendChild(promptEl);
     }
 
     const info = document.createElement('div');
@@ -2381,67 +2407,31 @@ function showTask(asset) {
       box.appendChild(cancel);
     }
   } else if (state.status === 'done') {
-    // Show card origin if present
-    if (state.card) {
-      const cardEl = document.createElement('div');
-      cardEl.style.cssText = 'border-left:3px solid #f0d888;padding:6px 10px;margin-bottom:10px;background:rgba(240,216,136,0.06);border-radius:0 6px 6px 0;font-size:12px;';
-      const cardHeader = document.createElement('div');
-      cardHeader.style.cssText = 'color:#f0d888;font-weight:bold;margin-bottom:2px;';
-      cardHeader.textContent = `\u2709\ufe0f ${state.card.from || 'Unknown'} (${state.card.source || 'inbox'})`;
-      const cardText = document.createElement('div');
-      cardText.style.cssText = 'color:#ccc;white-space:pre-wrap;word-break:break-word;';
-      cardText.textContent = state.card.text || '';
-      cardEl.appendChild(cardHeader);
-      cardEl.appendChild(cardText);
-      box.appendChild(cardEl);
-    }
-
     const resultEl = document.createElement('div');
     resultEl.className = 'rich-content section-mb';
     resultEl.innerHTML = sanitizeHTML(state.result);
     box.appendChild(resultEl);
 
-    const btnRow = document.createElement('div');
-    btnRow.style.cssText = 'display:flex;gap:6px;margin-top:8px;';
-
-    const canRerun = isOpen || isOcTask;
-    const clearBtn = document.createElement('button');
-    clearBtn.textContent = canRerun ? 'Accept' : 'Clear results';
-    clearBtn.className = `btn ${canRerun ? 'btn-primary' : 'btn-danger'}`;
-    clearBtn.onclick = async () => {
-      clearBtn.disabled = true;
+    const acceptBtn = document.createElement('button');
+    acceptBtn.textContent = 'Accept';
+    acceptBtn.className = 'btn btn-primary';
+    acceptBtn.onclick = async () => {
+      acceptBtn.disabled = true;
+      acceptBtn.textContent = 'Accepting...';
       try {
+        const headers = { 'Content-Type': 'application/json', ...(CONFIG.apiKey && { Authorization: `Bearer ${CONFIG.apiKey}` }) };
+        if (state.dtoId) {
+          await fetch(`${HUB_HTTP_URL}/api/queue/${encodeURIComponent(station)}/${state.dtoId}/forward`, {
+            method: 'POST', headers,
+            body: JSON.stringify({ target_station: station, by: 'Agent', data: state.result || '' }),
+          });
+        }
         await fetch(`${HUB_HTTP_URL}/api/task/${encodeURIComponent(station)}/clear`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...(CONFIG.apiKey && { Authorization: `Bearer ${CONFIG.apiKey}` }) },
+          method: 'POST', headers,
         });
       } catch {}
     };
-    btnRow.appendChild(clearBtn);
-
-    // Archive button when done + has card + archive station exists
-    if (state.card && property?.assets?.some(a => a.archive)) {
-      const archiveBtn = document.createElement('button');
-      archiveBtn.textContent = 'Archive';
-      archiveBtn.className = 'btn btn-accent';
-      archiveBtn.onclick = async () => {
-        archiveBtn.disabled = true;
-        archiveBtn.textContent = 'Archiving...';
-        try {
-          const headers = { 'Content-Type': 'application/json' };
-          if (CONFIG.apiKey) headers['Authorization'] = `Bearer ${CONFIG.apiKey}`;
-          const res = await fetch(`${HUB_HTTP_URL}/api/archive/${encodeURIComponent(station)}`, { method: 'POST', headers });
-          if (!res.ok) {
-            const err = await res.json().catch(() => ({}));
-            archiveBtn.textContent = err.error || 'Error';
-            archiveBtn.disabled = false;
-          }
-        } catch { archiveBtn.textContent = 'Failed'; archiveBtn.disabled = false; }
-      };
-      btnRow.appendChild(archiveBtn);
-    }
-
-    box.appendChild(btnRow);
+    box.appendChild(acceptBtn);
   }
 
   modal.appendChild(box);
@@ -2454,54 +2444,55 @@ function showTask(asset) {
   });
   document.body.appendChild(modal);
 
-  // Async: load DTO queue for this station
-  (async () => {
+  // DTO queue container — refreshable
+  const dtoContainer = document.createElement('div');
+  dtoContainer.id = 'task-dto-container';
+  box.appendChild(dtoContainer);
+
+  async function loadDtoQueue() {
     try {
       const headers = CONFIG.apiKey ? { Authorization: `Bearer ${CONFIG.apiKey}` } : {};
       const res = await fetch(`${HUB_HTTP_URL}/api/queue/${encodeURIComponent(station)}`, { headers });
       if (!res.ok) return;
       const { dtos } = await res.json();
+      dtoContainer.innerHTML = '';
       if (!dtos || !dtos.length) return;
       if (!document.getElementById('station-modal')) return;
 
-      const section = document.createElement('div');
-      section.style.cssText = 'margin-top:12px;border-top:1px solid rgba(255,255,255,0.1);padding-top:10px;';
-
-      const sectionTitle = document.createElement('div');
-      sectionTitle.style.cssText = 'font-size:11px;color:#aaa;margin-bottom:6px;text-transform:uppercase;letter-spacing:1px;';
-      sectionTitle.textContent = `📬 DTO Queue (${dtos.length})`;
-      section.appendChild(sectionTitle);
-
       const forwardTargets = getTaskTargets();
+      const activeDtoId = state.status === 'pending' ? state.dtoId : null;
 
-      for (const dto of dtos) {
+      function buildDtoCard(dto, isActive) {
         const card = document.createElement('div');
-        card.style.cssText = 'border:1px solid rgba(255,255,255,0.1);border-left:3px solid #88c0f0;border-radius:6px;padding:8px;margin-bottom:6px;background:rgba(10,20,30,0.4);';
+        const accentColor = isActive ? '#f0d888' : '#88c0f0';
+        card.style.cssText = `border:1px solid rgba(255,255,255,0.1);border-left:3px solid ${accentColor};border-radius:6px;padding:8px;margin-bottom:6px;background:rgba(10,20,30,0.4);`;
 
         const dtoHeader = document.createElement('div');
-        dtoHeader.style.cssText = 'font-size:10px;color:#88c0f0;margin-bottom:4px;font-weight:bold;';
+        dtoHeader.style.cssText = `font-size:10px;color:${accentColor};margin-bottom:6px;font-weight:bold;`;
         dtoHeader.textContent = `DTO ${dto.id} (${dto.type})`;
         card.appendChild(dtoHeader);
 
-        const trail = document.createElement('div');
-        trail.style.cssText = 'font-size:11px;color:#ccc;margin-bottom:6px;';
         for (const entry of dto.trail) {
           const line = document.createElement('div');
-          line.style.cssText = 'border-left:2px solid rgba(136,192,240,0.3);padding-left:6px;margin-bottom:3px;word-break:break-word;';
-          const label = document.createElement('span');
-          label.style.cssText = 'color:#88c0f0;font-weight:bold;';
-          label.textContent = `${entry.station} (${entry.by}): `;
-          const text = document.createElement('span');
-          text.textContent = entry.data;
+          line.style.cssText = `border-left:2px solid rgba(136,192,240,0.3);padding-left:8px;margin-bottom:6px;`;
+          const label = document.createElement('div');
+          label.style.cssText = `color:${accentColor};font-weight:bold;font-size:10px;margin-bottom:3px;`;
+          label.textContent = `${entry.station} (${entry.by})`;
           line.appendChild(label);
+          const text = document.createElement('div');
+          text.style.cssText = 'font-size:12px;color:#ccc;word-break:break-word;';
+          if (/<[a-z][\s\S]*>/i.test(entry.data)) {
+            text.innerHTML = sanitizeHTML(entry.data);
+          } else {
+            text.textContent = entry.data;
+          }
           line.appendChild(text);
-          trail.appendChild(line);
+          card.appendChild(line);
         }
-        card.appendChild(trail);
 
-        if (forwardTargets.length > 0) {
+        if (!isActive && forwardTargets.length > 0) {
           const fwdRow = document.createElement('div');
-          fwdRow.style.cssText = 'display:flex;gap:4px;align-items:center;';
+          fwdRow.style.cssText = 'display:flex;gap:4px;align-items:center;margin-top:4px;';
           const fwdSelect = buildTargetSelect(forwardTargets);
           const fwdBtn = document.createElement('button');
           fwdBtn.textContent = 'Forward';
@@ -2535,12 +2526,36 @@ function showTask(asset) {
           card.appendChild(fwdRow);
         }
 
-        section.appendChild(card);
+        return card;
       }
 
-      box.appendChild(section);
+      const activeDto = activeDtoId ? dtos.find(d => d.id === activeDtoId) : null;
+      const queueDtos = activeDtoId ? dtos.filter(d => d.id !== activeDtoId) : dtos;
+
+      if (activeDto) {
+        const activeSection = document.createElement('div');
+        activeSection.style.cssText = 'margin-top:12px;border-top:1px solid rgba(255,255,255,0.1);padding-top:10px;';
+        const activeTitle = document.createElement('div');
+        activeTitle.style.cssText = 'font-size:11px;color:#f0d888;margin-bottom:6px;text-transform:uppercase;letter-spacing:1px;';
+        activeTitle.textContent = '⚡ Active Task';
+        activeSection.appendChild(activeTitle);
+        activeSection.appendChild(buildDtoCard(activeDto, true));
+        dtoContainer.appendChild(activeSection);
+      }
+
+      if (queueDtos.length > 0) {
+        const queueSection = document.createElement('div');
+        queueSection.style.cssText = 'margin-top:12px;border-top:1px solid rgba(255,255,255,0.1);padding-top:10px;';
+        const queueTitle = document.createElement('div');
+        queueTitle.style.cssText = 'font-size:11px;color:#aaa;margin-bottom:6px;text-transform:uppercase;letter-spacing:1px;';
+        queueTitle.textContent = `📬 DTO Queue (${queueDtos.length})`;
+        queueSection.appendChild(queueTitle);
+        for (const dto of queueDtos) queueSection.appendChild(buildDtoCard(dto, false));
+        dtoContainer.appendChild(queueSection);
+      }
     } catch { /* ignore */ }
-  })();
+  }
+  loadDtoQueue();
 }
 
 async function showRemoteBoard(asset) {
@@ -2599,7 +2614,13 @@ function showStationInfo(asset) {
     }
   }
 
-  const setup = `HOW TO SET UP:\n\n1. In Property Editor, place furniture\n2. Set "Station" field to: "${station}"\n3. Agents walk here when calling:\n   update_state({ state: "${station}" })`;
+  const setup = 'PRO TIPS:\n\n' +
+    '• Agents walk here automatically when their\n' +
+    '  current work matches the station name.\n\n' +
+    '• Use post_to_board() to leave notes or status\n' +
+    '  updates visible to visitors.\n\n' +
+    '• Name stations after verbs (reading, planning)\n' +
+    '  so the village feels alive.';
 
   showModal(`${icon} ${station.replace(/_/g, ' ')}`, text, true, setup);
 }
@@ -2608,79 +2629,28 @@ function showSignalInfo(asset) {
   const station = asset.station || 'Unnamed Signal';
   const trigger = asset.trigger;
   const interval = asset.trigger_interval || 60;
-  const allowPayload = asset.allow_payload === true;
-  const hasPayload = asset.trigger_payload !== undefined;
 
-  let desc = `Trigger: ${trigger}\n`;
-  desc += `Payload: ${allowPayload ? '✓ Enabled' : '✗ Disabled'}${hasPayload && allowPayload ? ' (configured)' : ''}\n`;
-  desc += '\n';
+  let desc = `Trigger: ${trigger}\n\n`;
 
   let setup = '';
   let editableInterval = null;
 
   if (trigger === 'manual') {
-    desc += 'Fires manually via API or git hooks.';
-    setup = 'HOW TO USE:\n\n';
-    setup += '1. Tell your agent:\n';
-    setup += `   "Listen to ${station} and [task] when\n`;
-    setup += '   it fires"\n\n';
-    setup += '2. Or add to .md agent file:\n';
-    setup += `   subscribe({ name: "${station}" })\n`;
-    setup += '   In a loop: check_events()\n\n';
-    setup += '3. Fire the signal:\n';
-    setup += `   POST /api/signals/fire\n`;
-    setup += `   {"station": "${station}"`;
-    if (allowPayload) {
-      setup += `,\n    "payload": {"dynamic": "data"}`;
-    }
-    setup += `}\n\n`;
-    setup += '4. Or use git hook:\n';
-    setup += '   .git/hooks/post-commit calls the API\n\n';
-    if (allowPayload) {
-      setup += 'DUAL PAYLOAD SYSTEM:\n';
-      setup += '• signal_payload: Default payload (above)\n';
-      setup += '  Always sent if configured\n';
-      setup += '• dynamic_payload: API request payload\n';
-      setup += '  Sent when provided in API call\n';
-      setup += '• Agent receives both in check_events()\n\n';
-      setup += 'Example received payload:\n';
-      setup += '{\n';
-      if (hasPayload) {
-        setup += '  "signal_payload": <default data>,\n';
-      }
-      setup += '  "dynamic_payload": <API data>\n';
-      setup += '}\n\n';
-    }
-    setup += 'TIP: For .md agents, add this pattern:\n';
-    setup += '━━━━━━━━━━━━━━━━\n';
-    setup += `subscribe({ name: "${station}" })\n`;
-    setup += 'while (true) {\n';
-    setup += '  check_events()  // waits for signal\n';
-    setup += '  // do your task here\n';
-    setup += '}';
+    desc += 'Fires manually via API, viewer, or git hooks.\nCreates a DTO in the station queue on each fire.';
+    setup = 'PRO TIPS:\n\n';
+    setup += '• Instead of [YOUR TASK HERE], reference a .md file\n';
+    setup += '  with detailed instructions for the agent.\n\n';
+    setup += '• Leave [YOUR TASK HERE] empty and define everything\n';
+    setup += '  in the CLAUDE.md file instead.';
   } else if (trigger === 'heartbeat') {
-    desc += `Fires automatically every ${interval} second${interval !== 1 ? 's' : ''}.`;
-    setup = 'HOW TO USE:\n\n';
-    setup += '1. Tell your agent:\n';
-    setup += `   "Every ${interval} seconds, check [thing]\n`;
-    setup += `   by subscribing to ${station}"\n\n`;
-    setup += '2. Or add to .md agent file:\n';
-    setup += `   subscribe({ name: "${station}" })\n`;
-    setup += '   Loop with check_events()\n\n';
-    setup += '3. Change interval: Edit above ↑\n\n';
-    if (allowPayload && hasPayload) {
-      setup += 'PAYLOAD:\n';
-      setup += '• Signal has configured payload\n';
-      setup += '• Hub must set ALLOW_SIGNAL_PAYLOADS=true\n';
-      setup += '• Payload sent with each heartbeat\n\n';
-    }
-    setup += 'TIP: For .md agents, add this pattern:\n';
-    setup += '━━━━━━━━━━━━━━━━\n';
-    setup += `subscribe({ name: "${station}" })\n`;
-    setup += 'while (true) {\n';
-    setup += '  check_events()  // fires every interval\n';
-    setup += '  // run periodic task here\n';
-    setup += '}';
+    desc += `Fires every ${interval}s. Accumulates results in a single DTO.\nWhen forwarded, a new DTO is created on next tick.`;
+    setup = 'PRO TIPS:\n\n';
+    setup += '• Great for periodic checks: RSS feeds,\n';
+    setup += '  API polling, health monitoring.\n\n';
+    setup += '• Results accumulate in one DTO — forward\n';
+    setup += '  it to archive when it gets long.\n\n';
+    setup += '• Pair with a task station to auto-process\n';
+    setup += '  each tick.';
 
     editableInterval = { station, currentInterval: interval };
   }
@@ -2688,9 +2658,9 @@ function showSignalInfo(asset) {
   // Copy-paste agent prompt
   let agentPrompt;
   if (trigger === 'manual') {
-    agentPrompt = `Subscribe to "${station}" and loop: check_events() → when it fires, do your task → repeat.`;
+    agentPrompt = `Subscribe to "${station}" and loop: check_events() → when it fires, receive_dto("${station}") to get the task, [YOUR TASK HERE], say() a brief summary in your speech bubble, then forward_dto back to "${station}" with the full result → repeat.`;
   } else {
-    agentPrompt = `Subscribe to "${station}" and loop: check_events() (fires every ${interval}s) → do your periodic task → repeat.`;
+    agentPrompt = `Subscribe to "${station}" and loop: check_events() (fires every ${interval}s) → receive_dto("${station}", dto_id) to get data, do your periodic task, say() a brief summary, then forward_dto back with result → repeat.`;
   }
 
   const fireBtn = trigger === 'manual' ? { station } : null;
@@ -2769,6 +2739,88 @@ function showSignalInfo(asset) {
     } else {
       box.appendChild(promptWrap);
     }
+
+    // Async: load DTO queue for this station
+    (async () => {
+      try {
+        const headers = CONFIG.apiKey ? { Authorization: `Bearer ${CONFIG.apiKey}` } : {};
+        const res = await fetch(`${HUB_HTTP_URL}/api/queue/${encodeURIComponent(station)}`, { headers });
+        if (!res.ok) return;
+        const { dtos } = await res.json();
+        if (!dtos || !dtos.length) return;
+
+        const forwardTargets = getTaskTargets();
+        const section = document.createElement('div');
+        section.style.cssText = 'margin-top:12px;border-top:1px solid rgba(255,255,255,0.1);padding-top:10px;';
+        const sectionTitle = document.createElement('div');
+        sectionTitle.style.cssText = 'font-size:11px;color:#aaa;margin-bottom:6px;text-transform:uppercase;letter-spacing:1px;';
+        sectionTitle.textContent = `DTO Queue (${dtos.length})`;
+        section.appendChild(sectionTitle);
+
+        for (const dto of dtos) {
+          const card = document.createElement('div');
+          card.style.cssText = 'border:1px solid rgba(255,255,255,0.1);border-left:3px solid #88c0f0;border-radius:6px;padding:8px;margin-bottom:6px;background:rgba(10,20,30,0.4);';
+          const dtoHeader = document.createElement('div');
+          dtoHeader.style.cssText = 'font-size:10px;color:#88c0f0;margin-bottom:6px;font-weight:bold;';
+          dtoHeader.textContent = `DTO ${dto.id} (${dto.type})`;
+          card.appendChild(dtoHeader);
+          for (const entry of dto.trail) {
+            const line = document.createElement('div');
+            line.style.cssText = 'border-left:2px solid rgba(136,192,240,0.3);padding-left:8px;margin-bottom:6px;';
+            const label = document.createElement('div');
+            label.style.cssText = 'color:#88c0f0;font-weight:bold;font-size:10px;margin-bottom:3px;';
+            label.textContent = `${entry.station} (${entry.by})`;
+            line.appendChild(label);
+            const text = document.createElement('div');
+            text.style.cssText = 'font-size:12px;color:#ccc;word-break:break-word;';
+            if (/<[a-z][\s\S]*>/i.test(entry.data)) {
+              text.innerHTML = sanitizeHTML(entry.data);
+            } else {
+              text.textContent = entry.data;
+            }
+            line.appendChild(text);
+            card.appendChild(line);
+          }
+          if (forwardTargets.length > 0) {
+            const fwdRow = document.createElement('div');
+            fwdRow.style.cssText = 'display:flex;gap:4px;align-items:center;margin-top:4px;';
+            const fwdSelect = buildTargetSelect(forwardTargets);
+            const fwdBtn = document.createElement('button');
+            fwdBtn.textContent = 'Forward';
+            fwdBtn.className = 'btn btn-accent';
+            fwdBtn.style.cssText = 'font-size:11px;padding:2px 8px;';
+            fwdBtn.onclick = async () => {
+              if (!fwdSelect.value) return;
+              const target = JSON.parse(fwdSelect.value);
+              fwdBtn.disabled = true;
+              fwdBtn.textContent = 'Forwarding...';
+              try {
+                const fwdHeaders = { 'Content-Type': 'application/json' };
+                if (CONFIG.apiKey) fwdHeaders['Authorization'] = `Bearer ${CONFIG.apiKey}`;
+                const fwdRes = await fetch(
+                  `${HUB_HTTP_URL}/api/queue/${encodeURIComponent(station)}/${dto.id}/forward`,
+                  { method: 'POST', headers: fwdHeaders, body: JSON.stringify({ target_station: target.station, by: 'Viewer', data: 'Forwarded by viewer' }) }
+                );
+                if (fwdRes.ok) {
+                  card.style.opacity = '0.3';
+                  card.style.transition = 'opacity 0.5s';
+                  fwdBtn.textContent = 'Forwarded';
+                } else {
+                  const err = await fwdRes.json().catch(() => ({}));
+                  fwdBtn.textContent = err.error || 'Error';
+                  fwdBtn.disabled = false;
+                }
+              } catch { fwdBtn.textContent = 'Failed'; fwdBtn.disabled = false; }
+            };
+            fwdRow.appendChild(fwdSelect);
+            fwdRow.appendChild(fwdBtn);
+            card.appendChild(fwdRow);
+          }
+          section.appendChild(card);
+        }
+        box.appendChild(section);
+      } catch { /* ignore */ }
+    })();
   }, fireBtn);
 }
 
@@ -2859,15 +2911,13 @@ async function showActivityLog(asset) {
     }
   }
 
-  let setup = 'HOW TO SET UP:\n\n';
-  setup += '1. Place any furniture (bulletin board,\n';
-  setup += '   logbook, etc.)\n';
-  setup += '2. Name it something with "log" in it,\n';
-  setup += '   OR set custom field:\n';
-  setup += '   logger=true\n\n';
-  setup += '3. Click on it to view activity log\n\n';
-  setup += 'Logs are stored in hub memory and\n';
-  setup += 'cleared on restart.';
+  let setup = 'PRO TIPS:\n\n';
+  setup += '• Logs capture every state transition —\n';
+  setup += '  great for debugging agent behavior.\n\n';
+  setup += '• Name any furniture with "log" in it\n';
+  setup += '  to turn it into a log viewer.\n\n';
+  setup += '• Logs live in memory and reset on\n';
+  setup += '  server restart.';
 
   showModal('📋 Activity Log', content, true, setup);
 }
@@ -2895,176 +2945,26 @@ function showModal(title, content, scrollable = false, setupInstructions = null,
   box.appendChild(titleEl);
   box.appendChild(contentEl);
 
-  // Add payload toggle for signal assets
-  if (signalAsset && signalAsset.trigger) {
-    const payloadContainer = document.createElement('div');
-    payloadContainer.className = 'settings-row';
-
-    const checkbox = document.createElement('input');
-    checkbox.type = 'checkbox';
-    checkbox.id = 'payload-checkbox';
-    checkbox.checked = signalAsset.allow_payload === true;
-    checkbox.className = 'form-checkbox';
-
-    const label = document.createElement('label');
-    label.htmlFor = 'payload-checkbox';
-    label.className = 'text-label';
-    label.textContent = 'Allow payload';
-
-    const statusMsg = document.createElement('span');
-    statusMsg.className = 'text-status';
-
-    // Payload editor (shown when checkbox is checked)
-    const payloadEditorContainer = document.createElement('div');
-    payloadEditorContainer.className = 'section-mt';
-    payloadEditorContainer.style.display = signalAsset.allow_payload ? 'block' : 'none';
-
+  // Payload textarea for manual signal assets
+  let _payloadTextarea = null;
+  if (signalAsset && signalAsset.trigger === 'manual') {
+    const payloadWrap = document.createElement('div');
+    payloadWrap.className = 'section-mt';
     const payloadLabel = document.createElement('div');
     payloadLabel.className = 'text-muted';
-    payloadLabel.style.fontSize = '11px';
-    payloadLabel.style.marginBottom = '4px';
-    payloadLabel.textContent = signalAsset.trigger === 'manual'
-      ? 'Default payload (sent with every fire):'
-      : 'Payload (JSON or text):';
-
-    const payloadTextarea = document.createElement('textarea');
-    payloadTextarea.rows = 4;
-    payloadTextarea.placeholder = '{"key": "value"} or simple text';
+    payloadLabel.style.cssText = 'font-size:11px;margin-bottom:4px;';
+    payloadLabel.textContent = 'Payload (sent with fire):';
+    _payloadTextarea = document.createElement('textarea');
+    _payloadTextarea.rows = 3;
+    _payloadTextarea.placeholder = 'Enter task or data to send...';
     const currentPayload = signalAsset.trigger_payload;
-    payloadTextarea.value = currentPayload !== undefined
+    _payloadTextarea.value = currentPayload !== undefined
       ? (typeof currentPayload === 'string' ? currentPayload : JSON.stringify(currentPayload, null, 2))
       : '';
-    payloadTextarea.className = 'form-textarea';
-
-    const payloadSaveBtn = document.createElement('button');
-    payloadSaveBtn.textContent = 'Save Payload';
-    payloadSaveBtn.className = 'btn btn-accent section-mt';
-
-    const payloadStatusMsg = document.createElement('span');
-    payloadStatusMsg.className = 'text-status';
-
-    payloadSaveBtn.onclick = async () => {
-      try {
-        const propResponse = await fetch('/api/property');
-        const property = await propResponse.json();
-        const asset = property.assets.find(a => a.id === signalAsset.id);
-
-        if (!asset) {
-          payloadStatusMsg.textContent = '❌ Asset not found';
-          payloadStatusMsg.style.color = '#d04040';
-          return;
-        }
-
-        const val = payloadTextarea.value.trim();
-        if (val === '') {
-          delete asset.trigger_payload;
-        } else {
-          try {
-            asset.trigger_payload = JSON.parse(val);
-          } catch {
-            asset.trigger_payload = val;
-          }
-        }
-
-        const saveResponse = await fetch('/api/property', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...(CONFIG.apiKey && { Authorization: `Bearer ${CONFIG.apiKey}` }) },
-          body: JSON.stringify(property)
-        });
-
-        if (saveResponse.ok) {
-          signalAsset.trigger_payload = asset.trigger_payload;
-          payloadStatusMsg.textContent = '✓ Saved';
-          payloadStatusMsg.style.color = '#60d060';
-        } else {
-          payloadStatusMsg.textContent = '❌ Save failed';
-          payloadStatusMsg.style.color = '#d04040';
-        }
-      } catch (err) {
-        payloadStatusMsg.textContent = '❌ Error';
-        payloadStatusMsg.style.color = '#d04040';
-      }
-
-      setTimeout(() => payloadStatusMsg.textContent = '', 3000);
-    };
-
-    payloadEditorContainer.appendChild(payloadLabel);
-    payloadEditorContainer.appendChild(payloadTextarea);
-    payloadEditorContainer.appendChild(payloadSaveBtn);
-    payloadEditorContainer.appendChild(payloadStatusMsg);
-
-    checkbox.onchange = async () => {
-      // Show warning when enabling payloads
-      if (checkbox.checked) {
-        const confirmed = await showPayloadWarning();
-        if (!confirmed) {
-          checkbox.checked = false;
-          return;
-        }
-      }
-
-      try {
-        // Fetch current property
-        const propResponse = await fetch('/api/property');
-        const property = await propResponse.json();
-
-        // Find and update the asset
-        const asset = property.assets.find(a => a.id === signalAsset.id);
-        if (!asset) {
-          statusMsg.textContent = '❌ Asset not found';
-          statusMsg.style.color = '#d04040';
-          return;
-        }
-
-        if (checkbox.checked) {
-          asset.allow_payload = true;
-          statusMsg.textContent = '✓ Enabled';
-          statusMsg.style.color = '#60d060';
-          payloadEditorContainer.style.display = 'block';
-        } else {
-          delete asset.allow_payload;
-          delete asset.trigger_payload;
-          statusMsg.textContent = '✓ Disabled';
-          statusMsg.style.color = '#60d060';
-          payloadEditorContainer.style.display = 'none';
-          payloadTextarea.value = '';
-        }
-
-        // Save updated property
-        const saveResponse = await fetch('/api/property', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...(CONFIG.apiKey && { Authorization: `Bearer ${CONFIG.apiKey}` }) },
-          body: JSON.stringify(property)
-        });
-
-        if (saveResponse.ok) {
-          // Update local reference
-          signalAsset.allow_payload = checkbox.checked ? true : undefined;
-          // Update description text
-          contentEl.textContent = contentEl.textContent.replace(
-            /Payload: [^\n]+/,
-            `Payload: ${checkbox.checked ? '✓ Enabled' : '✗ Disabled'}`
-          );
-        } else {
-          statusMsg.textContent = '❌ Save failed';
-          statusMsg.style.color = '#d04040';
-          checkbox.checked = !checkbox.checked;
-        }
-      } catch (err) {
-        statusMsg.textContent = '❌ Error';
-        statusMsg.style.color = '#d04040';
-        checkbox.checked = !checkbox.checked;
-      }
-
-      setTimeout(() => statusMsg.textContent = '', 3000);
-    };
-
-    payloadContainer.appendChild(checkbox);
-    payloadContainer.appendChild(label);
-    payloadContainer.appendChild(statusMsg);
-
-    box.appendChild(payloadContainer);
-    box.appendChild(payloadEditorContainer);
+    _payloadTextarea.className = 'form-textarea';
+    payloadWrap.appendChild(payloadLabel);
+    payloadWrap.appendChild(_payloadTextarea);
+    box.appendChild(payloadWrap);
   }
 
   // Add editable interval for heartbeat signals
@@ -3143,7 +3043,7 @@ function showModal(title, content, scrollable = false, setupInstructions = null,
     fireContainer.className = 'settings-row';
 
     const fireButton = document.createElement('button');
-    fireButton.textContent = '🔥 Fire Signal';
+    fireButton.textContent = 'Fire';
     fireButton.className = 'btn btn-fire';
 
     const fireStatus = document.createElement('span');
@@ -3153,21 +3053,28 @@ function showModal(title, content, scrollable = false, setupInstructions = null,
       fireButton.disabled = true;
       fireButton.style.opacity = '0.6';
       try {
+        const body = { station: fireBtn.station };
+        if (_payloadTextarea) {
+          const val = _payloadTextarea.value.trim();
+          if (val) {
+            try { body.payload = JSON.parse(val); } catch { body.payload = { data: val }; }
+          }
+        }
         const response = await fetch('/api/signals/fire', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...(CONFIG.apiKey && { Authorization: `Bearer ${CONFIG.apiKey}` }) },
-          body: JSON.stringify({ station: fireBtn.station })
+          body: JSON.stringify(body)
         });
         if (response.ok) {
-          fireStatus.textContent = '✓ Fired!';
+          fireStatus.textContent = 'Fired!';
           fireStatus.style.color = '#60d060';
         } else {
           const err = await response.json().catch(() => ({}));
-          fireStatus.textContent = `❌ ${err.error || 'Failed'}`;
+          fireStatus.textContent = err.error || 'Failed';
           fireStatus.style.color = '#d04040';
         }
       } catch {
-        fireStatus.textContent = '❌ Error';
+        fireStatus.textContent = 'Error';
         fireStatus.style.color = '#d04040';
       }
       fireButton.disabled = false;
@@ -3187,7 +3094,7 @@ function showModal(title, content, scrollable = false, setupInstructions = null,
 
     const toggleLink = document.createElement('div');
     toggleLink.className = 'toggle-link';
-    toggleLink.textContent = '► Show setup instructions';
+    toggleLink.textContent = '► Pro tips';
 
     const setupEl = document.createElement('pre');
     setupEl.className = 'setup-content';
@@ -3196,7 +3103,7 @@ function showModal(title, content, scrollable = false, setupInstructions = null,
     let expanded = false;
     toggleLink.onclick = () => {
       expanded = !expanded;
-      toggleLink.textContent = expanded ? '▼ Hide setup instructions' : '► Show setup instructions';
+      toggleLink.textContent = expanded ? '▼ Pro tips' : '► Pro tips';
       setupEl.style.display = expanded ? 'block' : 'none';
     };
 

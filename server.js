@@ -446,16 +446,38 @@ setInterval(() => {
     const intervalMs = (asset.trigger_interval || 60) * 1000;
     const last = signalLastFired.get(asset.id) || 0;
     if (now - last >= intervalMs) {
+      // Ensure queue exists
+      if (!currentProperty.queues) currentProperty.queues = {};
+      if (!currentProperty.queues[asset.station]) currentProperty.queues[asset.station] = [];
+      const queue = currentProperty.queues[asset.station];
+
+      // Accumulate into existing DTO or create a new one
+      const trailEntry = { station: asset.station, by: "Heartbeat", at: new Date().toISOString(), data: asset.instructions || "Heartbeat tick" };
+      let dto;
+      if (queue.length > 0) {
+        dto = queue[queue.length - 1];
+        dto.trail.push(trailEntry);
+      } else {
+        dto = {
+          id: Math.random().toString(36).slice(2, 10),
+          type: "heartbeat",
+          created_at: new Date().toISOString(),
+          trail: [trailEntry],
+        };
+        queue.push(dto);
+      }
+
       const message = { type: "signal", station: asset.station, trigger: asset.trigger, timestamp: now };
       const allowPayload = shouldAllowPayload(ALLOW_SIGNAL_PAYLOADS, asset);
       const payload = createHeartbeatPayload(asset, allowPayload);
       if (payload !== undefined) {
         message.payload = payload;
       }
+      message.payload = { ...(message.payload || {}), dtoId: dto.id };
       broadcast(message);
       signalLastFired.set(asset.id, now);
-      const payloadInfo = asset.trigger_payload !== undefined ? (allowPayload ? " (with payload)" : " (payload disabled)") : "";
-      console.log(`[hub] Signal fired: "${asset.station}" (${asset.trigger}) - interval: ${asset.trigger_interval}s${payloadInfo}`);
+      savePropertyToDisk().catch(e => console.error("[hub] Failed to save:", e));
+      console.log(`[hub] Signal fired: "${asset.station}" (${asset.trigger}) - DTO ${dto.id} (trail: ${dto.trail.length})`);
     }
   }
 }, 10_000);
