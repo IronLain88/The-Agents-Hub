@@ -59,7 +59,7 @@ const HUB_HTTP_URL = CONFIG.hubHttpUrl || '';
 const ASSET_BASE = CONFIG.assetBase || '/assets';
 let TILESET_URIS = CONFIG.tilesetUris || {};
 const CHARACTER_BASE = CONFIG.characterBase || `${ASSET_BASE}/characters`;
-const CHARACTER_NAME = CONFIG.characterName || "Aeon";
+const CHARACTER_NAME = CONFIG.characterName || "Kael";
 const ANIMATED_BASE = CONFIG.animatedBase || `${ASSET_BASE}/animated`;
 const SPRITE_BASE = CONFIG.spriteBase || `${ASSET_BASE}/sprites`;
 
@@ -1274,6 +1274,12 @@ function getTaskTargets() {
     if (!a.archive || !a.station) continue;
     targets.push({ type: 'archive', station: a.station, label: `${a.station.replace(/_/g, ' ')} (archive)`, busy: false });
   }
+  // Inbox station
+  for (const a of property?.assets || []) {
+    if (a.station !== 'inbox') continue;
+    targets.push({ type: 'inbox', station: 'inbox', label: 'inbox', busy: false });
+    break;
+  }
   return targets;
 }
 
@@ -1704,6 +1710,43 @@ function showArchive(asset) {
           }
           line.appendChild(text);
           card.appendChild(line);
+        }
+
+        const targets = getTaskTargets().filter(t => t.station !== station);
+        if (targets.length > 0) {
+          const row = document.createElement('div');
+          row.style.cssText = 'display:flex;gap:4px;align-items:center;margin-top:6px;';
+          const select = buildTargetSelect(targets);
+          const fwdBtn = document.createElement('button');
+          fwdBtn.textContent = 'Forward';
+          fwdBtn.className = 'btn btn-accent';
+          fwdBtn.style.cssText = 'font-size:11px;padding:2px 8px;';
+          fwdBtn.onclick = async () => {
+            if (!select.value) return;
+            const target = JSON.parse(select.value);
+            fwdBtn.disabled = true;
+            fwdBtn.textContent = 'Forwarding...';
+            try {
+              const h = { 'Content-Type': 'application/json' };
+              if (CONFIG.apiKey) h['Authorization'] = `Bearer ${CONFIG.apiKey}`;
+              const r = await fetch(`${HUB_HTTP_URL}/api/queue/${encodeURIComponent(station)}/${dto.id}/forward`, {
+                method: 'POST', headers: h,
+                body: JSON.stringify({ target_station: target.station, by: 'Viewer', data: dto.trail[0]?.data || '' }),
+              });
+              if (r.ok) {
+                card.style.opacity = '0.3';
+                card.style.transition = 'opacity 0.5s';
+                fwdBtn.textContent = 'Forwarded';
+              } else {
+                const err = await r.json().catch(() => ({}));
+                fwdBtn.textContent = err.error || 'Error';
+                fwdBtn.disabled = false;
+              }
+            } catch { fwdBtn.textContent = 'Failed'; fwdBtn.disabled = false; }
+          };
+          row.appendChild(select);
+          row.appendChild(fwdBtn);
+          card.appendChild(row);
         }
 
         list.appendChild(card);
