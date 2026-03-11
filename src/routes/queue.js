@@ -17,7 +17,7 @@ function makeDtoId() {
   return Math.random().toString(36).slice(2, 10);
 }
 
-function triggerTaskStation(asset, dto, broadcast, getProperty) {
+export function triggerTaskStation(asset, dto, broadcast, getProperty) {
   if (!asset?.task) return;
   let state = { status: "idle", result: null };
   try { if (asset.content?.data) state = JSON.parse(asset.content.data); } catch {}

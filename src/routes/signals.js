@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { createManualPayload, shouldAllowPayload } from "../lib/payload-merger.js";
 import * as schemas from "../lib/validation.js";
+import { triggerTaskStation } from "./queue.js";
 
 export default function signalRoutes(ctx) {
   const router = Router();
@@ -57,6 +58,11 @@ export default function signalRoutes(ctx) {
       message.payload = { ...(message.payload || {}), dtoId: dto.id };
       savePropertyToDisk().catch(e => console.error("[hub] Failed to save:", e));
       console.log(`[hub] Signal "${station}": DTO ${dto.id} created`);
+
+      if (asset.task) {
+        triggerTaskStation(asset, dto, broadcast, getProperty);
+        return res.json({ ok: true });
+      }
     }
 
     broadcast(message);
