@@ -242,7 +242,7 @@ async function loadProperty() {
   } catch { console.log("[hub] No saved property found"); }
 }
 
-let availableCharacters = ["Yuki"];
+let availableCharacters = ["Kael"];
 async function scanCharacters() {
   try {
     const files = await readdir(CHARACTERS_DIR);
